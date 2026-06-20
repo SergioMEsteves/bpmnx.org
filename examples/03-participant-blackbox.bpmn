@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  BPMNx EXAMPLE 03 — PARTICIPANT-SCOPE (BLACK-BOX AGENTIC POOL)
+
+  Demonstrates declaring an ENTIRE participant as an agentic system.
+
+  A collaboration with two pools:
+    - "Loan Origination" (whiteBox) — our modeled process.
+    - "AI Underwriting Service" (blackBox) — a counterparty whose internals
+      we do not model. We exchange messages with it. The whole participant is
+      an LLM system, declared via <bpmnx:participantEnhancement boundary="blackBox">.
+
+  This is the second tier of enhancement: not "a task is agentic" but
+  "an entire participant in the collaboration is an agentic system," with its
+  own participant-scope envelope (SLA, constraints, audit).
+
+  Run:  python3 tools/validate_bpmnx.py examples/03-participant-blackbox.bpmn
+  ============================================================================
+-->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    id="Definitions_Participant"
+    targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!-- ============ COLLABORATION (two participants) ============ -->
+  <bpmn:collaboration id="Collab_1">
+    <bpmn:participant id="Part_Origination" name="Loan Origination"
+                      processRef="Process_Origination"/>
+
+    <!-- Black-box agentic participant: no processRef (internals not modeled) -->
+    <bpmn:participant id="Part_Underwriting" name="AI Underwriting Service">
+      <bpmn:extensionElements>
+        <bpmnx:participantEnhancement version="1.0" determinism="nondeterministic"
+                                      boundary="blackBox">
+          <bpmnx:agent role="underwriter" modelClass="frontier-class">
+            <bpmnx:inputContract>Loan application package (applicant, amount, financials)</bpmnx:inputContract>
+            <bpmnx:outputContract>Decision: approve | decline | refer, with rationale and risk band</bpmnx:outputContract>
+          </bpmnx:agent>
+          <bpmnx:envelope confidenceThreshold="0.85" timeBudget="PT2M" audited="true">
+            <bpmnx:constraint type="compliance">Must apply fair-lending policy; no protected-class factors</bpmnx:constraint>
+            <bpmnx:constraint type="policy">Decisions above $250k always returned as "refer"</bpmnx:constraint>
+          </bpmnx:envelope>
+          <bpmnx:review kind="adversary" maxRetries="1">
+            <bpmnx:criterion>Decision rationale does not rely on a protected-class proxy</bpmnx:criterion>
+            <bpmnx:criterion>Risk band is consistent with the stated financials</bpmnx:criterion>
+          </bpmnx:review>
+        </bpmnx:participantEnhancement>
+      </bpmn:extensionElements>
+    </bpmn:participant>
+
+    <bpmn:messageFlow id="MF_Request"  sourceRef="Task_SendApp"  targetRef="Part_Underwriting"/>
+    <bpmn:messageFlow id="MF_Response" sourceRef="Part_Underwriting" targetRef="Event_Decision"/>
+  </bpmn:collaboration>
+
+  <!-- ============ OUR PROCESS (whiteBox) ============ -->
+  <bpmn:process id="Process_Origination" isExecutable="true">
+    <bpmn:startEvent id="Start_App" name="Application Received">
+      <bpmn:outgoing>S1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:task id="Task_SendApp" name="Send Application to Underwriting">
+      <bpmn:incoming>S1</bpmn:incoming>
+      <bpmn:outgoing>S2</bpmn:outgoing>
+    </bpmn:task>
+
+    <!-- Typed intermediate catch event: receives the AI decision message -->
+    <bpmn:intermediateCatchEvent id="Event_Decision" name="Decision Received">
+      <bpmn:incoming>S2</bpmn:incoming>
+      <bpmn:outgoing>S3</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_1"/>
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:userTask id="Task_Notify" name="Notify Applicant">
+      <bpmn:incoming>S3</bpmn:incoming>
+      <bpmn:outgoing>S4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End_App" name="Application Closed">
+      <bpmn:incoming>S4</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="S1" sourceRef="Start_App"     targetRef="Task_SendApp"/>
+    <bpmn:sequenceFlow id="S2" sourceRef="Task_SendApp"  targetRef="Event_Decision"/>
+    <bpmn:sequenceFlow id="S3" sourceRef="Event_Decision" targetRef="Task_Notify"/>
+    <bpmn:sequenceFlow id="S4" sourceRef="Task_Notify"   targetRef="End_App"/>
+  </bpmn:process>
+</bpmn:definitions>

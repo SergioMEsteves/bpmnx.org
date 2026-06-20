@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  BPMNx EXAMPLE 02b — LANE INHERITANCE (CLEAN, CONFORMANT)
+
+  Demonstrates lane-scope guardrails inherited by enhanced elements.
+
+  The "AI Agent" lane declares shared guardrails via <bpmnx:laneEnhancement>:
+    - toolDeny: email.send, billing       (BINDING — no element may use these)
+    - constraint: no PII to external      (BINDING — applies to all members)
+    - audited: true                       (every member is audited)
+    - confidenceThreshold: 0.60           (a floor; elements may raise it)
+
+  Task_Classify (inside the lane) declares its own envelope. Note it attempts
+  toolAllow="email.send" — which the lane DENIES. Per the inheritance model
+  (spec §6.2/§6.3) the lane denial wins: the effective allow set excludes
+  email.send. A conformant validator FLAGS this contradiction (see
+  validate_bpmnx.py output) even though the merge resolves it safely.
+
+  Run:  python3 tools/validate_bpmnx.py examples/02-lane-inheritance.bpmn
+        python3 tools/resolve_policy.py examples/02-lane-inheritance.bpmn
+  ============================================================================
+-->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    id="Definitions_LaneInheritClean"
+    targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="Process_LaneInheritClean" isExecutable="true">
+
+    <bpmn:laneSet id="LaneSet_1">
+      <!-- Standard BPMN lane carrying a BPMNx lane enhancement -->
+      <bpmn:lane id="Lane_AI" name="AI Agent">
+        <bpmn:extensionElements>
+          <bpmnx:laneEnhancement version="1.0">
+            <bpmnx:envelope confidenceThreshold="0.60" audited="true">
+              <bpmnx:toolDeny ref="email.send">No element in this lane may send email</bpmnx:toolDeny>
+              <bpmnx:toolDeny ref="billing">No billing system access anywhere in this lane</bpmnx:toolDeny>
+              <bpmnx:constraint type="compliance">No PII sent to external services</bpmnx:constraint>
+            </bpmnx:envelope>
+          </bpmnx:laneEnhancement>
+        </bpmn:extensionElements>
+        <bpmn:flowNodeRef>Task_Classify</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Draft</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Human" name="Human">
+        <bpmn:flowNodeRef>Start_1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Approve</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_1</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="Start_1" name="Start">
+      <bpmn:outgoing>F1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Enhanced element: tries to allow email.send (lane denies it) -->
+    <bpmn:serviceTask id="Task_Classify" name="Classify Lead">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+          <bpmnx:agent role="classifier"/>
+          <bpmnx:envelope confidenceThreshold="0.80">
+            <bpmnx:toolAllow ref="crm.read">Read CRM data</bpmnx:toolAllow>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>F1</bpmn:incoming>
+      <bpmn:outgoing>F2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Enhanced element: clean, inherits lane policy without conflict -->
+    <bpmn:serviceTask id="Task_Draft" name="Draft Summary">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+          <bpmnx:agent role="writer"/>
+          <bpmnx:envelope maxSteps="5">
+            <bpmnx:toolAllow ref="crm.read">Read CRM data for context</bpmnx:toolAllow>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>F2</bpmn:incoming>
+      <bpmn:outgoing>F3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_Approve" name="Human Approves">
+      <bpmn:incoming>F3</bpmn:incoming>
+      <bpmn:outgoing>F4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End_1" name="Done">
+      <bpmn:incoming>F4</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_1"      targetRef="Task_Classify"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_Classify" targetRef="Task_Draft"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Task_Draft"    targetRef="Task_Approve"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Task_Approve"  targetRef="End_1"/>
+
+  </bpmn:process>
+</bpmn:definitions>

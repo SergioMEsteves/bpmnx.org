@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    targetNamespace="http://bpmnx.org/schema/1.0/bpmnx"
+    elementFormDefault="qualified"
+    attributeFormDefault="unqualified">
+
+  <!-- ===================================================================
+       BPMNx 1.0 — BPMN 2.0 Extension Schema for Agentic AI
+       ===================================================================
+       Defines elements that live INSIDE the standard BPMN 2.0
+       <bpmn:extensionElements> container. Does not redefine, replace, or
+       alter any BPMN 2.0 element. A BPMNx file is a valid BPMN 2.0 file.
+
+       THREE SCOPES OF ENHANCEMENT:
+         1. Element  — <bpmnx:enhancement> on a task, gateway, sub-process,
+                       typed event. The element is AI-operated.
+         2. Lane     — <bpmnx:laneEnhancement> on a lane. Declares shared
+                       guardrails inherited by every enhanced element in
+                       the lane. Denials/constraints are binding floors.
+         3. Participant — <bpmnx:participantEnhancement> on a pool. Declares
+                       an entire participant (often a black-box pool) as an
+                       agentic system with a participant-scope envelope.
+       =================================================================== -->
+
+  <!-- ====================== ELEMENT ENHANCEMENT ====================== -->
+  <xsd:element name="enhancement" type="bpmnx:tEnhancement"/>
+
+  <xsd:complexType name="tEnhancement">
+    <xsd:annotation>
+      <xsd:documentation>
+        Marks a single BPMN element as AI-operated. Attach to the
+        extensionElements of: task (any subtype), subProcess,
+        exclusiveGateway, inclusiveGateway, intermediateCatchEvent, or a
+        TYPED start/end event (one carrying an eventDefinition).
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="agent"      type="bpmnx:tAgent"      minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="envelope"   type="bpmnx:tEnvelope"   minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="review"     type="bpmnx:tReview"     minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="escalation" type="bpmnx:tEscalation" minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="property"   type="bpmnx:tProperty"   minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="version"     type="xsd:string"        use="required" fixed="1.0"/>
+    <xsd:attribute name="determinism" type="bpmnx:tDeterminism" use="required"/>
+  </xsd:complexType>
+
+  <!-- ====================== LANE ENHANCEMENT ========================= -->
+  <xsd:element name="laneEnhancement" type="bpmnx:tLaneEnhancement"/>
+
+  <xsd:complexType name="tLaneEnhancement">
+    <xsd:annotation>
+      <xsd:documentation>
+        Declares shared guardrails for every enhanced element in a lane.
+        Attach to the extensionElements of a bpmn:lane. The envelope here is
+        a SCOPE envelope (no irreversible attribute — irreversibility is a
+        property of a specific action, not a band of work). Per the BPMNx
+        inheritance model: toolDeny and constraint cascade as BINDING floors
+        that member elements cannot relax; numeric/boolean defaults cascade
+        but member elements may only make them STRICTER.
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="envelope" type="bpmnx:tScopeEnvelope" minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="property" type="bpmnx:tProperty"      minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="version" type="xsd:string" use="required" fixed="1.0"/>
+  </xsd:complexType>
+
+  <!-- ====================== PARTICIPANT ENHANCEMENT ================== -->
+  <xsd:element name="participantEnhancement" type="bpmnx:tParticipantEnhancement"/>
+
+  <xsd:complexType name="tParticipantEnhancement">
+    <xsd:annotation>
+      <xsd:documentation>
+        Declares an entire participant (pool) as an agentic system. The
+        canonical case is a BLACK-BOX pool: a counterparty whose internals
+        are an agent's reasoning you do not model, with which the process
+        exchanges messages. Attach to the extensionElements of a
+        bpmn:participant.
+      </xsd:documentation>
+    </xsd:annotation>
+    <xsd:sequence>
+      <xsd:element name="agent"    type="bpmnx:tAgent"        minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="envelope" type="bpmnx:tScopeEnvelope" minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="review"   type="bpmnx:tReview"        minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="property" type="bpmnx:tProperty"      minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="version"     type="xsd:string"         use="required" fixed="1.0"/>
+    <xsd:attribute name="determinism" type="bpmnx:tDeterminism" use="required"/>
+    <xsd:attribute name="boundary"    type="bpmnx:tBoundary"    use="optional" default="blackBox"/>
+  </xsd:complexType>
+
+  <xsd:simpleType name="tBoundary">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="blackBox"/>   <!-- internals not modeled -->
+      <xsd:enumeration value="whiteBox"/>   <!-- pool contains a modeled process -->
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <!-- ====================== DETERMINISM ============================== -->
+  <xsd:simpleType name="tDeterminism">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="deterministic"/>
+      <xsd:enumeration value="nondeterministic"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <!-- ====================== AGENT ===================================== -->
+  <xsd:complexType name="tAgent">
+    <xsd:sequence>
+      <xsd:element name="systemPrompt"   type="xsd:string" minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="inputContract"  type="xsd:string" minOccurs="0" maxOccurs="1"/>
+      <xsd:element name="outputContract" type="xsd:string" minOccurs="0" maxOccurs="1"/>
+    </xsd:sequence>
+    <xsd:attribute name="role"       type="xsd:string" use="required"/>
+    <xsd:attribute name="modelClass" type="xsd:string" use="optional"/>
+  </xsd:complexType>
+
+  <!-- ====================== SCOPE ENVELOPE (base) ==================== -->
+  <!-- Used by lane and participant scope. No 'irreversible' attribute:
+       irreversibility is a property of a concrete action, not a scope. -->
+  <xsd:complexType name="tScopeEnvelope">
+    <xsd:sequence>
+      <xsd:element name="toolAllow"  type="bpmnx:tTool"       minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="toolDeny"   type="bpmnx:tTool"       minOccurs="0" maxOccurs="unbounded"/>
+      <xsd:element name="constraint" type="bpmnx:tConstraint" minOccurs="0" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="confidenceThreshold" type="bpmnx:tProbability"   use="optional"/>
+    <xsd:attribute name="maxSteps"            type="xsd:positiveInteger"  use="optional"/>
+    <xsd:attribute name="timeBudget"          type="xsd:duration"         use="optional"/>
+    <xsd:attribute name="retryPolicy"         type="xsd:string"           use="optional"/>
+    <xsd:attribute name="audited"             type="xsd:boolean"          use="optional" default="false"/>
+  </xsd:complexType>
+
+  <!-- ====================== ELEMENT ENVELOPE ======================== -->
+  <!-- Element scope adds 'irreversible' to the scope envelope. -->
+  <xsd:complexType name="tEnvelope">
+    <xsd:complexContent>
+      <xsd:extension base="bpmnx:tScopeEnvelope">
+        <xsd:attribute name="irreversible" type="xsd:boolean" use="optional" default="false"/>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+
+  <xsd:complexType name="tTool">
+    <xsd:simpleContent>
+      <xsd:extension base="xsd:string">
+        <xsd:attribute name="ref" type="xsd:string" use="required"/>
+      </xsd:extension>
+    </xsd:simpleContent>
+  </xsd:complexType>
+
+  <xsd:complexType name="tConstraint">
+    <xsd:simpleContent>
+      <xsd:extension base="xsd:string">
+        <xsd:attribute name="type" type="xsd:string" use="optional"/>
+      </xsd:extension>
+    </xsd:simpleContent>
+  </xsd:complexType>
+
+  <!-- ====================== REVIEW (CRITIC / ADVERSARY) ============== -->
+  <xsd:complexType name="tReview">
+    <xsd:sequence>
+      <xsd:element name="criterion" type="xsd:string" minOccurs="1" maxOccurs="unbounded"/>
+    </xsd:sequence>
+    <xsd:attribute name="kind"       type="bpmnx:tReviewKind"      use="required"/>
+    <xsd:attribute name="maxRetries" type="xsd:nonNegativeInteger" use="optional" default="2"/>
+    <xsd:attribute name="onFailRef"  type="xsd:IDREF"              use="optional"/>
+  </xsd:complexType>
+
+  <xsd:simpleType name="tReviewKind">
+    <xsd:restriction base="xsd:string">
+      <xsd:enumeration value="critic"/>
+      <xsd:enumeration value="adversary"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+  <!-- ====================== ESCALATION =============================== -->
+  <xsd:complexType name="tEscalation">
+    <xsd:simpleContent>
+      <xsd:extension base="xsd:string">
+        <xsd:attribute name="when"      type="xsd:string"   use="required"/>
+        <xsd:attribute name="targetRef" type="xsd:IDREF"    use="optional"/>
+        <xsd:attribute name="sla"       type="xsd:duration" use="optional"/>
+      </xsd:extension>
+    </xsd:simpleContent>
+  </xsd:complexType>
+
+  <!-- ====================== GENERIC PROPERTY ========================= -->
+  <xsd:complexType name="tProperty">
+    <xsd:simpleContent>
+      <xsd:extension base="xsd:string">
+        <xsd:attribute name="name" type="xsd:string" use="required"/>
+      </xsd:extension>
+    </xsd:simpleContent>
+  </xsd:complexType>
+
+  <!-- ====================== SHARED SIMPLE TYPES ===================== -->
+  <xsd:simpleType name="tProbability">
+    <xsd:restriction base="xsd:decimal">
+      <xsd:minInclusive value="0"/>
+      <xsd:maxInclusive value="1"/>
+    </xsd:restriction>
+  </xsd:simpleType>
+
+</xsd:schema>
