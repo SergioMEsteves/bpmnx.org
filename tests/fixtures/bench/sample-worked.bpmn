@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Bench embedded sample, kept verbatim in the 1.0 namespace as a legacy fixture. -->
+<!-- expect: W-LEGACY-NS E-CONTRADICTION@wtask -->
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"

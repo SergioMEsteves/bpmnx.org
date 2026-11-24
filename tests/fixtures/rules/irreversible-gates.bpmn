@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Irreversible Program steps: human after (warn), human before (ok) -->
+<!-- expect: W-IRREV-AFTER@X1 -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" id="D" targetNamespace="http://example.org/t">
+<bpmn:process id="P">
+  <bpmn:startEvent id="S"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+  <bpmn:serviceTask id="X1"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="deterministic"><bpmnx:envelope irreversible="true"/></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:serviceTask>
+  <bpmn:userTask id="H"><bpmn:incoming>f2</bpmn:incoming><bpmn:outgoing>f3</bpmn:outgoing></bpmn:userTask>
+  <bpmn:serviceTask id="X2"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="deterministic"><bpmnx:envelope irreversible="true"/></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f3</bpmn:incoming><bpmn:outgoing>f4</bpmn:outgoing></bpmn:serviceTask>
+  <bpmn:endEvent id="E"><bpmn:incoming>f4</bpmn:incoming></bpmn:endEvent>
+  <bpmn:sequenceFlow id="f1" sourceRef="S" targetRef="X1"/><bpmn:sequenceFlow id="f2" sourceRef="X1" targetRef="H"/>
+  <bpmn:sequenceFlow id="f3" sourceRef="H" targetRef="X2"/><bpmn:sequenceFlow id="f4" sourceRef="X2" targetRef="E"/>
+</bpmn:process>
+</bpmn:definitions>

@@ -57,32 +57,18 @@ def layout_process(proc):
         if s in nodes and t in nodes:
             succ[s].append(t)
             indeg[t] += 1
-    # longest path depth (cycles broken by visiting order)
-    depth = {}
-    roots = [i for i in nodes if indeg[i] == 0 and i not in boundary]
-    order = list(roots)
-    for r in roots:
-        depth[r] = 0
-    seen_edges = set()
-    i = 0
-    while i < len(order):
-        u = order[i]
-        i += 1
-        for v in succ[u]:
-            if (u, v) in seen_edges:
-                continue
-            seen_edges.add((u, v))
-            nd = depth[u] + 1
-            if v not in depth or (nd > depth[v] and nd < len(nodes) + 1):
-                depth[v] = nd
-                order.append(v)
-    # boundary events: column of host; their successors start one past the host
-    for b, host in boundary.items():
-        depth[b] = depth.get(host, 0)
-        for v in succ[b]:
-            depth[v] = max(depth.get(v, 0), depth[b] + 1)
-    for n in nodes:
-        depth.setdefault(n, 0)
+    # longest-path depth by bounded relaxation; a boundary event shares its
+    # host's column (weight-0 edge), everything else is one column on
+    edges = [(u, v, 1) for u in succ for v in succ[u]] + [(h, b, 0) for b, h in boundary.items() if h in nodes]
+    depth = {n: 0 for n in nodes}
+    for _ in range(len(nodes)):
+        changed = False
+        for u, v, w in edges:
+            if depth[u] + w > depth[v] and depth[u] + w <= len(nodes):
+                depth[v] = depth[u] + w
+                changed = True
+        if not changed:
+            break
 
     # lanes (innermost wins)
     lane_of = {}
@@ -134,15 +120,40 @@ def build(root):
             continue
         placed, bands, boundary, lanes = layout_process(proc)
         ncols = max((c for c, _, _ in placed.values()), default=0) + 1
-        # rows inside each band: stack nodes sharing a column
-        rows_in_band = defaultdict(int)
-        slot = {}
-        for nid, (c, band, local) in placed.items():
+        # rows: inherit the row of the first-placed predecessor; a gateway's k-th
+        # branch goes k rows down, a boundary event's successor one row down;
+        # collisions in a column bump downward
+        flows = [(f.get('sourceRef'), f.get('targetRef')) for f in proc.iter(q(BPMN, 'sequenceFlow'))]
+        outs_of = defaultdict(list)
+        for s_, t_ in flows:
+            outs_of[s_].append(t_)
+        want = {}
+        for nid in sorted(placed, key=lambda n: placed[n][0]):
             if nid in boundary:
                 continue
-            key = (band, c)
-            slot[nid] = rows_in_band[key]
-            rows_in_band[key] += 1
+            best = None
+            for s_, t_ in flows:
+                if t_ != nid:
+                    continue
+                if s_ in boundary:
+                    base = want.get(boundary[s_], 0) + 1
+                elif s_ in want:
+                    base = want[s_] + (outs_of[s_].index(nid) if placed[s_][2].endswith('Gateway') else 0)
+                else:
+                    continue
+                best = base if best is None else min(best, base)
+            want[nid] = best or 0
+        rows_in_band = defaultdict(set)
+        slot = {}
+        for nid in sorted(want, key=lambda n: (placed[n][0], want[n])):
+            c, band, _ = placed[nid]
+            r = want[nid]
+            while r in rows_in_band[(band, c)]:
+                r += 1
+            slot[nid] = r
+            rows_in_band[(band, c)].add(r)
+        rows_in_band = {k: max(v) + 1 for k, v in rows_in_band.items()}
+        rows_in_band = defaultdict(int, rows_in_band)
         band_rows = {b: max([rows_in_band[(b, c)] for c in range(ncols)] + [1]) for b in bands}
         x0 = 40 + (POOL_HDR if part_id else 0) + (LANE_HDR if bands != [None] else 0)
         width = ncols * COL_W + 2 * PAD_X

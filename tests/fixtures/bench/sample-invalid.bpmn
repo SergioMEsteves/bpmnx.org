@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Bench embedded sample, kept verbatim in the 1.0 namespace as a legacy fixture. -->
+<!-- expect: W-LEGACY-NS E-HOST@bstart E-VERSION@btask E-DET-MISSING@btask E-ONFAILREF@btask E-TARGETREF@btask E-CONTRADICTION@btask E-IRREV-NOHUMAN@bdisburse E-HOST@bend E-IRREV-SCOPE@blane E-CONF-RANGE@blane -->
 <bpmn:definitions
     xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
     xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"

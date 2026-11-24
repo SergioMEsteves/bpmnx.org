@@ -825,7 +825,18 @@ function computeLayout(model){
   const degree=new Map();
   for(const n of model.nodesById.values())
     degree.set(n.id,(n.incoming?n.incoming.length:0)+(n.outgoing?n.outgoing.length:0));
+  // boundary events sit ON their host by definition: take them out of overlap
+  // resolution and carry them along with whatever the host does
+  const pinned=new Map();
+  for(const n of model.nodesById.values()){
+    const bb=boxes.get(n.id), hb=n.attachedToRef&&boxes.get(n.attachedToRef);
+    if(n.local==='boundaryEvent' && bb && hb){ pinned.set(n.id,{bb,host:n.attachedToRef,dx:bb.x-hb.x,dy:bb.y-hb.y}); boxes.delete(n.id); }
+  }
   const movedBoxes = resolveOverlaps(boxes, degree);
+  for(const [id,{bb,host,dx,dy}] of pinned){
+    const hb=boxes.get(host); bb.x=hb.x+dx; bb.y=hb.y+dy; boxes.set(id,bb);
+    if(movedBoxes.has(host)) movedBoxes.add(id);
+  }
 
   // ---- sequence-flow edges: orthogonal, obstacle-avoiding routing ----
   const edges=[];
@@ -1711,7 +1722,7 @@ function renderInspector(){
     const p=el('div','note'); p.style.borderLeftColor='var(--line2)';
     const lane=n.laneId?STATE.model.lanesById.get(n.laneId):null;
     const part=n.participantId?STATE.model.participantsById.get(n.participantId):null;
-    p.innerHTML=`Not AI-operated. Plain BPMN ${esc(n.local)}.`+
+    p.innerHTML=`Not agent-operated. Plain BPMN ${esc(n.local)}.`+
       (lane?`<br>Lane: <b>${esc(lane.name||lane.id)}</b>${lane.enh?' (enhanced)':''}`:'')+
       (part?`<br>Pool: <b>${esc(part.name||part.id)}</b>${part.enh?` (${esc(part.boundary)})`:''}`:'');
     main.appendChild(p);

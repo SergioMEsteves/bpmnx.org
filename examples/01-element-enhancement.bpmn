@@ -80,8 +80,8 @@
       </bpmn:extensionElements>
       <bpmn:incoming>F2</bpmn:incoming>
       <bpmn:outgoing>F_Qualified</bpmn:outgoing>
-      <bpmn:outgoing>F_Disqualified</bpmn:outgoing>
       <bpmn:outgoing>F_Human</bpmn:outgoing>
+      <bpmn:outgoing>F_Disqualified</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Task_Draft" name="Draft Outreach">
@@ -158,8 +158,8 @@
     <bpmn:sequenceFlow id="F1" sourceRef="Start_Intake" targetRef="Task_Classify"/>
     <bpmn:sequenceFlow id="F2" sourceRef="Task_Classify" targetRef="Gw_Route"/>
     <bpmn:sequenceFlow id="F_Qualified" sourceRef="Gw_Route" targetRef="Task_Draft" name="qualified"/>
-    <bpmn:sequenceFlow id="F_Disqualified" sourceRef="Gw_Route" targetRef="End_Disqualified" name="disqualified"/>
     <bpmn:sequenceFlow id="F_Human" sourceRef="Gw_Route" targetRef="Task_HumanReview" name="needs-human"/>
+    <bpmn:sequenceFlow id="F_Disqualified" sourceRef="Gw_Route" targetRef="End_Disqualified" name="disqualified"/>
     <bpmn:sequenceFlow id="F_Esc" sourceRef="Bnd_ClassifyEscalate" targetRef="Task_HumanReview"/>
     <bpmn:sequenceFlow id="F_ReviewFail" sourceRef="Bnd_DraftReviewFail" targetRef="Task_HumanReview"/>
     <bpmn:sequenceFlow id="F3" sourceRef="Task_Draft" targetRef="Task_Approve"/>
@@ -196,10 +196,10 @@
         <dc:Bounds x="1167" y="102" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_Manual_di" bpmnElement="End_Manual">
-        <dc:Bounds x="827" y="342" width="36" height="36"/>
+        <dc:Bounds x="997" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_Disqualified_di" bpmnElement="End_Disqualified">
-        <dc:Bounds x="657" y="222" width="36" height="36"/>
+        <dc:Bounds x="657" y="342" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Bnd_ClassifyEscalate_di" bpmnElement="Bnd_ClassifyEscalate">
         <dc:Bounds x="350" y="142" width="36" height="36"/>
@@ -219,17 +219,17 @@
         <di:waypoint x="530" y="120"/>
         <di:waypoint x="620" y="120"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="F_Disqualified_di" bpmnElement="F_Disqualified">
-        <di:waypoint x="530" y="120"/>
-        <di:waypoint x="550" y="120"/>
-        <di:waypoint x="550" y="240"/>
-        <di:waypoint x="657" y="240"/>
-      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Human_di" bpmnElement="F_Human">
         <di:waypoint x="530" y="120"/>
         <di:waypoint x="550" y="120"/>
         <di:waypoint x="550" y="240"/>
         <di:waypoint x="790" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_Disqualified_di" bpmnElement="F_Disqualified">
+        <di:waypoint x="530" y="120"/>
+        <di:waypoint x="550" y="120"/>
+        <di:waypoint x="550" y="360"/>
+        <di:waypoint x="657" y="360"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Esc_di" bpmnElement="F_Esc">
         <di:waypoint x="368" y="178"/>
@@ -254,9 +254,8 @@
         <di:waypoint x="1167" y="120"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F5_di" bpmnElement="F5">
-        <di:waypoint x="845" y="280"/>
-        <di:waypoint x="845" y="360"/>
-        <di:waypoint x="827" y="360"/>
+        <di:waypoint x="900" y="240"/>
+        <di:waypoint x="997" y="240"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

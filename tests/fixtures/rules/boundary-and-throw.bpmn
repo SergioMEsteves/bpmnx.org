@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Typed boundary event is enhanceable; intermediateThrowEvent is not -->
+<!-- expect: E-HOST@Th -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" id="D" targetNamespace="http://example.org/t">
+<bpmn:process id="P">
+  <bpmn:startEvent id="S"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+  <bpmn:task id="T"><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:task>
+  <bpmn:boundaryEvent id="B" attachedToRef="T"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="nondeterministic"></bpmnx:enhancement></bpmn:extensionElements><bpmn:outgoing>f4</bpmn:outgoing><bpmn:conditionalEventDefinition id="c"><bpmn:condition>x</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:boundaryEvent>
+  <bpmn:intermediateThrowEvent id="Th"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="nondeterministic"></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f2</bpmn:incoming><bpmn:outgoing>f3</bpmn:outgoing><bpmn:signalEventDefinition id="s"/></bpmn:intermediateThrowEvent>
+  <bpmn:endEvent id="E"><bpmn:incoming>f3</bpmn:incoming><bpmn:incoming>f4</bpmn:incoming></bpmn:endEvent>
+  <bpmn:sequenceFlow id="f1" sourceRef="S" targetRef="T"/><bpmn:sequenceFlow id="f2" sourceRef="T" targetRef="Th"/>
+  <bpmn:sequenceFlow id="f3" sourceRef="Th" targetRef="E"/><bpmn:sequenceFlow id="f4" sourceRef="B" targetRef="E"/>
+</bpmn:process>
+</bpmn:definitions>
