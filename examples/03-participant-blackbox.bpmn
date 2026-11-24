@@ -15,25 +15,18 @@
   "an entire participant in the collaboration is an agentic system," with its
   own participant-scope envelope (SLA, constraints, audit).
 
-  Run:  python3 tools/validate_bpmnx.py examples/03-participant-blackbox.bpmn
+  Run:  python tools/validate_bpmnx.py examples/03-participant-blackbox.bpmn
   ============================================================================
--->
-<bpmn:definitions
-    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
-    id="Definitions_Participant"
-    targetNamespace="http://bpmn.io/schema/bpmn">
+--><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Participant" targetNamespace="http://bpmn.io/schema/bpmn">
 
   <!-- ============ COLLABORATION (two participants) ============ -->
   <bpmn:collaboration id="Collab_1">
-    <bpmn:participant id="Part_Origination" name="Loan Origination"
-                      processRef="Process_Origination"/>
+    <bpmn:participant id="Part_Origination" name="Loan Origination" processRef="Process_Origination"/>
 
     <!-- Black-box agentic participant: no processRef (internals not modeled) -->
     <bpmn:participant id="Part_Underwriting" name="AI Underwriting Service">
       <bpmn:extensionElements>
-        <bpmnx:participantEnhancement version="1.0" determinism="nondeterministic"
-                                      boundary="blackBox">
+        <bpmnx:participantEnhancement version="1.1" determinism="nondeterministic" boundary="blackBox">
           <bpmnx:agent role="underwriter" modelClass="frontier-class">
             <bpmnx:inputContract>Loan application package (applicant, amount, financials)</bpmnx:inputContract>
             <bpmnx:outputContract>Decision: approve | decline | refer, with rationale and risk band</bpmnx:outputContract>
@@ -50,7 +43,7 @@
       </bpmn:extensionElements>
     </bpmn:participant>
 
-    <bpmn:messageFlow id="MF_Request"  sourceRef="Task_SendApp"  targetRef="Part_Underwriting"/>
+    <bpmn:messageFlow id="MF_Request" sourceRef="Task_SendApp" targetRef="Part_Underwriting"/>
     <bpmn:messageFlow id="MF_Response" sourceRef="Part_Underwriting" targetRef="Event_Decision"/>
   </bpmn:collaboration>
 
@@ -81,9 +74,59 @@
       <bpmn:incoming>S4</bpmn:incoming>
     </bpmn:endEvent>
 
-    <bpmn:sequenceFlow id="S1" sourceRef="Start_App"     targetRef="Task_SendApp"/>
-    <bpmn:sequenceFlow id="S2" sourceRef="Task_SendApp"  targetRef="Event_Decision"/>
+    <bpmn:sequenceFlow id="S1" sourceRef="Start_App" targetRef="Task_SendApp"/>
+    <bpmn:sequenceFlow id="S2" sourceRef="Task_SendApp" targetRef="Event_Decision"/>
     <bpmn:sequenceFlow id="S3" sourceRef="Event_Decision" targetRef="Task_Notify"/>
-    <bpmn:sequenceFlow id="S4" sourceRef="Task_Notify"   targetRef="End_App"/>
+    <bpmn:sequenceFlow id="S4" sourceRef="Task_Notify" targetRef="End_App"/>
   </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collab_1">
+      <bpmndi:BPMNShape id="Part_Origination_di" bpmnElement="Part_Origination" isHorizontal="true">
+        <dc:Bounds x="40" y="40" width="960" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_App_di" bpmnElement="Start_App">
+        <dc:Bounds x="177" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SendApp_di" bpmnElement="Task_SendApp">
+        <dc:Bounds x="310" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Decision_di" bpmnElement="Event_Decision">
+        <dc:Bounds x="517" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Notify_di" bpmnElement="Task_Notify">
+        <dc:Bounds x="650" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_App_di" bpmnElement="End_App">
+        <dc:Bounds x="857" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Part_Underwriting_di" bpmnElement="Part_Underwriting" isHorizontal="true">
+        <dc:Bounds x="40" y="240" width="700" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="S1_di" bpmnElement="S1">
+        <di:waypoint x="213" y="120"/>
+        <di:waypoint x="310" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="S2_di" bpmnElement="S2">
+        <di:waypoint x="420" y="120"/>
+        <di:waypoint x="517" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="S3_di" bpmnElement="S3">
+        <di:waypoint x="553" y="120"/>
+        <di:waypoint x="650" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="S4_di" bpmnElement="S4">
+        <di:waypoint x="760" y="120"/>
+        <di:waypoint x="857" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="MF_Request_di" bpmnElement="MF_Request">
+        <di:waypoint x="365" y="160"/>
+        <di:waypoint x="365" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="MF_Response_di" bpmnElement="MF_Response">
+        <di:waypoint x="535" y="240"/>
+        <di:waypoint x="535" y="138"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>

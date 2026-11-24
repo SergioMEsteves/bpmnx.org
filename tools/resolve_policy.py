@@ -1,144 +1,90 @@
 #!/usr/bin/env python3
-"""BPMNx 1.0 policy resolver — reference implementation of the §6 merge algorithm.
+"""BPMNx effective-policy resolver (CLI).
 
-For every enhanced element, computes its EFFECTIVE policy by merging the scope
-chain (participant → lane → element) per spec §6.2. Prints the resolved
-guardrails so authors can see exactly what a conformant runtime would enforce.
+For every enhanced element, folds the scope chain
+    [participant (whiteBox)] -> [lane (outer) -> ... -> lane (inner)] -> [element]
+per spec §6 and prints the effective guardrails with the scope each value came
+from. Implemented in bpmnx_core.py (a port of the BPMNx Bench engine).
 
-This is a reference implementation of the normative inheritance model. A
-conformant runtime MUST produce the same effective policy.
-
-Usage: python3 resolve_policy.py <file.bpmn>
+Usage:
+  python tools/resolve_policy.py FILE.bpmn [--json]
 """
+import argparse
+import json
+import os
 import sys
-from lxml import etree
 
-BPMN_NS  = 'http://www.omg.org/spec/BPMN/20100524/MODEL'
-BPMNX_NS = 'http://bpmnx.org/schema/1.0/bpmnx'
-NS = {'bpmn': BPMN_NS, 'bpmnx': BPMNX_NS}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bpmnx_core as core  # noqa: E402
 
 
-def localname(tag):
-    if not isinstance(tag, str):
-        return ''
-    return tag.split('}')[-1] if '}' in tag else tag
-
-
-def parse_envelope(env_el):
-    """Extract an envelope element into a policy dict."""
-    if env_el is None:
-        return {}
-    p = {
-        'toolAllow':  set(),
-        'toolDeny':   set(),
-        'constraint': [],
-    }
-    for ta in env_el.findall('bpmnx:toolAllow', NS):
-        p['toolAllow'].add(ta.get('ref'))
-    for td in env_el.findall('bpmnx:toolDeny', NS):
-        p['toolDeny'].add(td.get('ref'))
-    for c in env_el.findall('bpmnx:constraint', NS):
-        p['constraint'].append((c.get('type', ''), (c.text or '').strip()))
-    for attr in ('confidenceThreshold', 'maxSteps', 'timeBudget', 'retryPolicy',
-                 'audited', 'irreversible'):
-        v = env_el.get(attr)
-        if v is not None:
-            p[attr] = v
-    return p
-
-
-def merge(broader, narrower):
-    """Merge two policy dicts per spec §6.2. broader ⊕ narrower."""
-    out = {}
-    # Unions (binding)
-    out['toolDeny']   = broader.get('toolDeny', set()) | narrower.get('toolDeny', set())
-    out['constraint'] = broader.get('constraint', []) + narrower.get('constraint', [])
-    # Allow = union minus all denies
-    allow = broader.get('toolAllow', set()) | narrower.get('toolAllow', set())
-    out['toolAllow'] = allow - out['toolDeny']
-    # confidenceThreshold = max
-    cts = [float(x['confidenceThreshold']) for x in (broader, narrower)
-           if x.get('confidenceThreshold') is not None]
-    if cts:
-        out['confidenceThreshold'] = max(cts)
-    # maxSteps = min
-    ms = [int(x['maxSteps']) for x in (broader, narrower) if x.get('maxSteps') is not None]
-    if ms:
-        out['maxSteps'] = min(ms)
-    # timeBudget = min (string compare on ISO duration is unsafe; keep narrower if present)
-    tb = [x['timeBudget'] for x in (broader, narrower) if x.get('timeBudget') is not None]
-    if tb:
-        out['timeBudget'] = tb[-1]  # narrower wins as documented fallback
-    # audited = OR
-    aud = any(str(x.get('audited', 'false')).lower() == 'true' for x in (broader, narrower))
-    out['audited'] = 'true' if aud else 'false'
-    # retryPolicy = narrower wins
-    rp = [x['retryPolicy'] for x in (broader, narrower) if x.get('retryPolicy') is not None]
-    if rp:
-        out['retryPolicy'] = rp[-1]
-    # irreversible = element scope only (narrower)
-    if narrower.get('irreversible') is not None:
-        out['irreversible'] = narrower['irreversible']
-    return out
-
-
-def resolve(bpmn_path):
-    tree = etree.parse(bpmn_path)
-    root = tree.getroot()
-
-    # Map element id → lane envelope policy (if any)
-    lane_policy_for = {}
-    for lane in root.findall('.//bpmn:lane', NS):
-        le = lane.find('.//bpmnx:laneEnhancement', NS)
-        if le is None:
+def resolve(path):
+    m = core.parse_model(path)
+    if not m.ok:
+        raise SystemExit(f'cannot parse {path}: {m.parseError}')
+    out = []
+    for n in m.nodes.values():
+        if not n['enh']:
             continue
-        env = le.find('bpmnx:envelope', NS)
-        pol = parse_envelope(env)
-        for fnr in lane.findall('bpmn:flowNodeRef', NS):
-            lane_policy_for[fnr.text] = pol
-
-    # Find element enhancements
-    results = []
-    for enh in root.findall('.//bpmnx:enhancement', NS):
-        host = enh.getparent().getparent()
-        hid  = host.get('id') if host is not None else '?'
-        hname = host.get('name', hid) if host is not None else '?'
-        env = enh.find('bpmnx:envelope', NS)
-        elem_pol = parse_envelope(env)
-
-        # Scope chain: lane (broader) → element (narrower)
-        lane_pol = lane_policy_for.get(hid, {})
-        effective = merge(lane_pol, elem_pol)
-        results.append((hname, hid, lane_pol, elem_pol, effective))
-
-    return results
+        p = core.effective_policy(m, n)
+        out.append(dict(
+            id=n['id'], name=n['name'], determinism=n['enh']['determinism'],
+            chain=[f"{c['scope']}:{c['owner']}" for c in p['chain']],
+            toolAllow=[(t['ref'], t['frm']) for t in p['toolAllow']],
+            toolDeny=[(t['ref'], t['frm']) for t in p['toolDeny']],
+            overridden=p['overridden'],
+            constraints=[(c.get('type') or '', c['text'], c['frm']) for c in p['constraints']],
+            confidenceThreshold=(p['confidenceThreshold']['val'], p['confidenceThreshold']['frm']),
+            maxSteps=(p['maxSteps']['val'], p['maxSteps']['frm']),
+            timeBudget=(p['timeBudget']['val'], p['timeBudget']['frm']),
+            retryPolicy=(p['retryPolicy']['val'], p['retryPolicy']['frm']),
+            audited=(p['audited']['val'], p['audited']['frm']),
+            irreversible=p['irreversible']['val']))
+    return m, out
 
 
-def fmt_set(s):
-    return ', '.join(sorted(s)) if s else '—'
+def _fmt(xs):
+    return ', '.join(f'{v} <{s}>' for v, s in xs) or '-'
+
+
+def main(argv=None):
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+    ap = argparse.ArgumentParser(description='BPMNx effective-policy resolver')
+    ap.add_argument('file')
+    ap.add_argument('--json', action='store_true')
+    a = ap.parse_args(argv)
+    m, res = resolve(a.file)
+    if a.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f'BPMNx {m.bpmnxVersion} effective-policy resolution: {a.file}')
+    print('=' * 72)
+    for r in res:
+        kind = 'AI' if r['determinism'] == 'nondeterministic' else 'Program'
+        print(f"\n* {r['name'] or r['id']}  (id={r['id']}, {kind})")
+        print(f"   scope chain   : {' -> '.join(r['chain']) or '-'}")
+        print(f"   tools allowed : {_fmt(r['toolAllow'])}")
+        print(f"   tools denied  : {_fmt(r['toolDeny'])}")
+        for o in r['overridden']:
+            print(f"   OVERRIDDEN    : {o['ref']} (allowed at {o['allowedBy']}, denied at {o['deniedBy']})")
+        for key, label in (('confidenceThreshold', 'confidence   '), ('maxSteps', 'max steps    '),
+                           ('timeBudget', 'time budget  '), ('retryPolicy', 'retry policy ')):
+            v, s = r[key]
+            if v is not None:
+                print(f'   {label} : {v} <{s}>')
+        v, s = r['audited']
+        print(f"   audited       : {f'true <{s}>' if v else 'false'}")
+        if r['irreversible']:
+            print('   irreversible  : true (human approval required before side effect)')
+        if r['constraints']:
+            print('   constraints   :')
+            for t, txt, s in r['constraints']:
+                print(f'      [{t}] {txt} <{s}>')
+    print('\nProvenance in <angle brackets> is the scope that set the effective value.')
+    return 0
 
 
 if __name__ == '__main__':
-    path = sys.argv[1] if len(sys.argv) > 1 else 'examples/02-lane-inheritance.bpmn'
-    results = resolve(path)
-    print(f"BPMNx effective-policy resolution: {path}")
-    print("=" * 70)
-    for hname, hid, lane_pol, elem_pol, eff in results:
-        print(f"\n● {hname}  (id={hid})")
-        if lane_pol:
-            print(f"   inherits lane envelope: deny={fmt_set(lane_pol.get('toolDeny', set()))}, "
-                  f"audited={lane_pol.get('audited','false')}, "
-                  f"confidence>={lane_pol.get('confidenceThreshold','—')}")
-        print(f"   EFFECTIVE POLICY:")
-        print(f"     tools allowed : {fmt_set(eff.get('toolAllow', set()))}")
-        print(f"     tools denied  : {fmt_set(eff.get('toolDeny', set()))}")
-        if eff.get('confidenceThreshold') is not None:
-            print(f"     confidence floor: {eff['confidenceThreshold']}")
-        print(f"     audited       : {eff.get('audited','false')}")
-        if eff.get('maxSteps') is not None:
-            print(f"     max steps     : {eff['maxSteps']}")
-        if eff.get('constraint'):
-            print(f"     constraints   :")
-            for ctype, ctext in eff['constraint']:
-                print(f"        [{ctype}] {ctext}")
-    print()
+    sys.exit(main())

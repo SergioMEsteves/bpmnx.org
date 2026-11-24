@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BPMNx Bench — test harness for BPMNx 1.0</title>
+<title>BPMNx Bench — test harness for BPMNx 1.1</title>
 <style>
   :root{
     --bg:#0F1218; --panel:#161A22; --raised:#1C2230; --raised2:#222A3A;
@@ -191,7 +191,7 @@
 <header>
   <div class="brand">
     <span class="name">BPMNx<b>·</b>Bench</span>
-    <span class="sub">test harness · BPMNx 1.0</span>
+    <span class="sub">test harness · BPMNx 1.1</span>
   </div>
   <select id="sampleSel" title="Built-in files">
     <option value="conformant">Demo: conformant loan-review</option>
@@ -259,8 +259,14 @@
    Parser · Validator · §6 policy engine · token simulator · renderer
    =================================================================== */
 'use strict';
+/* @engine:begin — parser, §6 policy engine, §7 validator. Pure functions, no DOM
+   rendering. tools/bpmnx_core.py is a port of this region; tests/parity.mjs
+   runs both over every example and fails on any disagreement. */
 const BPMN ='http://www.omg.org/spec/BPMN/20100524/MODEL';
-const BPMNX='http://bpmnx.org/schema/1.0/bpmnx';
+const BPMNX_NS10='http://bpmnx.org/schema/1.0/bpmnx';
+const BPMNX_NS11='http://bpmnx.org/schema/1.1/bpmnx';
+const BPMNX_VERSION_OF={[BPMNX_NS10]:'1.0',[BPMNX_NS11]:'1.1'};
+let BPMNX=BPMNX_NS11;   // active namespace for the document being parsed (set in parseModel)
 const DI  ='http://www.omg.org/spec/BPMN/20100524/DI';
 const DC  ='http://www.omg.org/spec/DD/20100524/DC';
 const DIW ='http://www.omg.org/spec/DD/20100524/DI';
@@ -377,16 +383,22 @@ function parseParticipantEnhancement(node){
 
 function parseModel(xmlText){
   const doc=new DOMParser().parseFromString(xmlText,'application/xml');
-  const perr=doc.querySelector('parsererror');
+  const perr=doc.getElementsByTagName('parsererror')[0];
   if(perr) return {ok:false, parseError:perr.textContent};
   const defs=doc.documentElement;
   if(!defs || defs.localName!=='definitions')
     return {ok:false, parseError:'Root element is not <bpmn:definitions>. Not a BPMN 2.0 document.'};
 
+  // BPMNx namespace: 1.1 is current; a document using only 1.0 is read as legacy
+  const has10=defs.getElementsByTagNameNS(BPMNX_NS10,'*').length>0;
+  const has11=defs.getElementsByTagNameNS(BPMNX_NS11,'*').length>0;
+  BPMNX = (has10&&!has11) ? BPMNX_NS10 : BPMNX_NS11;
+
   const model={ ok:true, doc, defs,
     nodesById:new Map(), flowsById:new Map(), messageFlows:[],
     lanesById:new Map(), participantsById:new Map(), processesById:new Map(),
-    diShapes:new Map(), diEdges:new Map(), hasAnyBpmnx:false, collaborationId:null };
+    diShapes:new Map(), diEdges:new Map(), hasAnyBpmnx:false, collaborationId:null,
+    bpmnxNs:BPMNX, bpmnxVersion:BPMNX_VERSION_OF[BPMNX], legacy:BPMNX===BPMNX_NS10, mixedNs:has10&&has11 };
 
   // collaboration / participants
   const collab=descAll(defs,BPMN,'collaboration')[0];
@@ -411,16 +423,21 @@ function parseModel(xmlText){
     const procObj={id:pid, laneIds:[], nodeIds:[]};
     model.processesById.set(pid,procObj);
 
-    // lanes
-    descAll(proc,BPMN,'lane').forEach(l=>{
-      const id=l.getAttribute('id');
-      const lane={id, name:l.getAttribute('name'), processId:pid,
-        flowNodeRefs:kids(l,BPMN,'flowNodeRef').map(txt), enh:null, hostLocal:'lane'};
-      const enhNode=getEnhancementNode(l,'laneEnhancement');
-      if(enhNode){ lane.enh=parseLaneEnhancement(enhNode); model.hasAnyBpmnx=true; }
-      lane._mis=collectMisattached(l,'lane');
-      model.lanesById.set(id,lane); procObj.laneIds.push(id);
-    });
+    // lanes — recursive through childLaneSet; each lane records its ancestry (outer → inner)
+    const walkLaneSet=(ls,ancestors)=>{
+      kids(ls,BPMN,'lane').forEach(l=>{
+        const id=l.getAttribute('id');
+        const lane={id, name:l.getAttribute('name'), processId:pid,
+          flowNodeRefs:kids(l,BPMN,'flowNodeRef').map(txt), enh:null, hostLocal:'lane',
+          ancestors:[...ancestors], depth:ancestors.length};
+        const enhNode=getEnhancementNode(l,'laneEnhancement');
+        if(enhNode){ lane.enh=parseLaneEnhancement(enhNode); model.hasAnyBpmnx=true; }
+        lane._mis=collectMisattached(l,'lane');
+        model.lanesById.set(id,lane); procObj.laneIds.push(id);
+        kids(l,BPMN,'childLaneSet').forEach(cls=>walkLaneSet(cls,[...ancestors,id]));
+      });
+    };
+    kids(proc,BPMN,'laneSet').forEach(ls=>walkLaneSet(ls,[]));
 
     // flow nodes (everything that is a child flow element of the process)
     const FLOW_LOCALS=new Set([...TASK_TYPES,...SUBPROC_TYPES,
@@ -432,8 +449,8 @@ function parseModel(xmlText){
         const eventDefs=[...n.childNodes].filter(c=>c.nodeType===1 && c.namespaceURI===BPMN && /EventDefinition$/.test(c.localName)).map(c=>c.localName);
         const node={ id, local:n.localName, name:n.getAttribute('name'), processId:pid,
           eventDefs, incoming:kids(n,BPMN,'incoming').map(txt), outgoing:kids(n,BPMN,'outgoing').map(txt),
-          default:n.getAttribute('default'),
-          enh:null, laneId:null, participantId:null, bounds:null };
+          default:n.getAttribute('default'), attachedToRef:n.getAttribute('attachedToRef'),
+          enh:null, laneId:null, laneIds:[], participantId:null, bounds:null };
         const enhNode=getEnhancementNode(n,'enhancement');
         if(enhNode){ node.enh=parseElementEnhancement(enhNode); model.hasAnyBpmnx=true; }
         node._misLane=getEnhancementNode(n,'laneEnhancement');
@@ -451,9 +468,13 @@ function parseModel(xmlText){
     });
   });
 
-  // map node -> lane
+  // map node -> innermost lane, plus the full lane chain (outer → inner) for §6.1
   for(const lane of model.lanesById.values())
-    lane.flowNodeRefs.forEach(ref=>{ const n=model.nodesById.get(ref); if(n) n.laneId=lane.id; });
+    lane.flowNodeRefs.forEach(ref=>{ const n=model.nodesById.get(ref); if(!n) return;
+      const cur=n.laneId?model.lanesById.get(n.laneId):null;
+      if(!cur || lane.depth>=cur.depth) n.laneId=lane.id; });
+  for(const n of model.nodesById.values())
+    if(n.laneId) n.laneIds=[...model.lanesById.get(n.laneId).ancestors, n.laneId];
   // map node -> participant (via processRef)
   for(const part of model.participantsById.values()){
     const proc=model.processesById.get(part.processRef);
@@ -499,8 +520,8 @@ function scopeChain(model, node){
     if(p && p.enh && p.boundary==='whiteBox' && p.enh.envelope)
       chain.push({scope:'participant', env:p.enh.envelope, owner:p});
   }
-  if(node.laneId){
-    const l=model.lanesById.get(node.laneId);
+  for(const lid of (node.laneIds||[])){        // nested lanes: outer → inner (§6.1)
+    const l=model.lanesById.get(lid);
     if(l && l.enh && l.enh.envelope) chain.push({scope:'lane', env:l.enh.envelope, owner:l});
   }
   const elEnv = node.enh ? (node.enh.envelope||{toolAllow:[],toolDeny:[],constraints:[]}) : null;
@@ -553,21 +574,25 @@ function validate(model){
   const out=[];
   const E=(code,message,ref)=>out.push({severity:'error',code,message,ref});
   const W=(code,message,ref)=>out.push({severity:'warning',code,message,ref});
+  const V=model.bpmnxVersion||'1.1';
+  if(model.mixedNs) E('E-NS-MIXED','Document mixes the BPMNx 1.0 and 1.1 namespaces. Use one namespace per document (§9).',null);
+  if(model.legacy) W('W-LEGACY-NS','Document uses the BPMNx 1.0 namespace. It is checked under 1.1 rules; migrate with tools/migrate_1_0_to_1_1.py (§9).',null);
 
   const elementHostOk = node => {
     if(TASK_TYPES.has(node.local)||SUBPROC_TYPES.has(node.local)) return true;
     if(ENH_GATEWAYS.has(node.local)) return true;
     if(node.local==='intermediateCatchEvent') return true;
-    if(node.local==='startEvent'||node.local==='endEvent') return node.eventDefs.length>0; // typed only
+    if(node.local==='startEvent'||node.local==='endEvent'||node.local==='boundaryEvent')
+      return node.eventDefs.length>0; // typed only
     return false;
   };
   const disallowedReason = node => {
-    if(node.local==='startEvent'||node.local==='endEvent')
+    if(node.local==='startEvent'||node.local==='endEvent'||node.local==='boundaryEvent')
       return `a plain ${node.local} (no eventDefinition) carries no judgment to bound (§2.1)`;
     if(node.local==='parallelGateway'||node.local==='eventBasedGateway'||node.local==='complexGateway')
       return `a ${node.local} is not an enhanceable host; only exclusive/inclusive gateways are (§2.1)`;
-    if(node.local==='intermediateThrowEvent'||node.local==='boundaryEvent')
-      return `a ${node.local} is not in the enhanceable set (§2.1)`;
+    if(node.local==='intermediateThrowEvent')
+      return `an intermediateThrowEvent emits a signal; there is no judgment to bound (§2.1)`;
     return `${node.local} is not an enhanceable host (§2.1)`;
   };
 
@@ -577,10 +602,11 @@ function validate(model){
     if(node._misPart) E('E-SCOPE-HOST',`participantEnhancement is attached to <${node.local}>; it may only attach to a bpmn:participant (§2.3).`,node.id);
     if(!node.enh) continue;
     const enh=node.enh, ref=node.id, where=node.name?`"${node.name}"`:node.id;
+    let _reach=null; const reach=()=>(_reach||(_reach=reachableFrom(model,node)));
 
     if(!elementHostOk(node)) E('E-HOST',`enhancement on ${where} is invalid: ${disallowedReason(node)}.`,ref);
 
-    if(enh.version!=='1.0') E('E-VERSION',`enhancement on ${where} has version="${esc(enh.version)}"; BPMNx 1.0 fixes it to "1.0".`,ref);
+    if(enh.version!==V) E('E-VERSION',`enhancement on ${where} has version="${esc(enh.version)}"; BPMNx ${V} fixes it to "${V}".`,ref);
     if(!enh.hasDeterminism) E('E-DET-MISSING',`enhancement on ${where} is missing the required determinism attribute (§3.1).`,ref);
     else if(enh.determinism!=='deterministic'&&enh.determinism!=='nondeterministic')
       E('E-DET-ENUM',`determinism="${esc(enh.determinism)}" on ${where} is not deterministic|nondeterministic.`,ref);
@@ -595,6 +621,8 @@ function validate(model){
       if(!r.criteria.length) E('E-REVIEW-CRIT',`review #${i+1} on ${where} declares no <criterion> (at least one required).`,ref);
       if(r.onFailRef && !model.nodesById.has(r.onFailRef))
         E('E-ONFAILREF',`review onFailRef="${esc(r.onFailRef)}" on ${where} does not resolve to an element id (§7.1).`,ref);
+      else if(r.onFailRef && !reach().has(r.onFailRef))
+        E('E-REF-UNREACHABLE',`review onFailRef="${esc(r.onFailRef)}" on ${where} is not reachable by sequence flow from the element or a boundary event attached to it (§4.3).`,ref);
       if(!Number.isNaN(r.maxRetries) && r.maxRetries<0) E('E-MAXRETRIES',`review maxRetries on ${where} must be ≥ 0.`,ref);
     });
     // escalations
@@ -602,6 +630,8 @@ function validate(model){
       if(!s.when) E('E-ESCAL-WHEN',`escalation #${i+1} on ${where} is missing the required when attribute (§4).`,ref);
       if(s.targetRef && !model.nodesById.has(s.targetRef))
         E('E-TARGETREF',`escalation targetRef="${esc(s.targetRef)}" on ${where} does not resolve to an element id (§7.1).`,ref);
+      else if(s.targetRef && !reach().has(s.targetRef))
+        E('E-REF-UNREACHABLE',`escalation targetRef="${esc(s.targetRef)}" on ${where} is not reachable by sequence flow from the element or a boundary event attached to it (§4.3).`,ref);
       if(s.sla && Number.isNaN(durationToSeconds(s.sla)))
         E('E-SLA',`escalation sla="${esc(s.sla)}" on ${where} is not an ISO-8601 duration.`,ref);
     });
@@ -619,8 +649,22 @@ function validate(model){
       const humanPred=preds.some(p=>HUMAN_TYPES.has(p.local));
       const humanSucc=succs.some(s=>HUMAN_TYPES.has(s.local));
       if(humanPred){ /* ok: approval precedes the side effect (§5.1) */ }
-      else if(humanSucc) W('W-IRREV-AFTER',`irreversible action ${where} is followed by a human-controlled element but not preceded by one. §7.1 says "followed by", yet §5.1 requires approval before any side effect — place the human gate upstream.`,ref);
-      else E('E-IRREV-NOHUMAN',`irreversible action ${where} has no human-controlled element (userTask/manualTask) adjacent in the flow to gate it (§5.1, §7.1).`,ref);
+      else if(humanSucc) W('W-IRREV-AFTER',`irreversible action ${where} is followed by a human-controlled element but not preceded by one. Approval must come before the side effect — place the human gate upstream (§5.1, §7.1).`,ref);
+      else E('E-IRREV-NOHUMAN',`irreversible action ${where} is not immediately preceded by a human-controlled element (userTask/manualTask) to gate it (§5.1, §7.1).`,ref);
+    }
+
+    // §4.4 gateway outcomes ↔ outgoing flow names (AI gateways only)
+    if(ENH_GATEWAYS.has(node.local) && enh.determinism==='nondeterministic' && enh.agent){
+      const outcomes=gatewayOutcomes(enh.agent.outputContract);
+      if(outcomes.length){
+        const outs=node.outgoing.map(fid=>model.flowsById.get(fid)).filter(Boolean);
+        const names=new Set(outs.filter(f=>f.name).map(f=>f.name.trim().toLowerCase()));
+        const low=new Set(outcomes.map(o=>o.toLowerCase()));
+        outcomes.forEach(o=>{ if(!names.has(o.toLowerCase()))
+          W('W-GW-OUTCOME',`gateway ${where} can return "${esc(o)}" but no outgoing flow is named "${esc(o)}"; that outcome has nowhere to go (§4.4).`,ref); });
+        outs.forEach(f=>{ if(f.name && !low.has(f.name.trim().toLowerCase()) && f.id!==node.default)
+          W('W-GW-FLOW',`outgoing flow "${esc(f.name)}" of gateway ${where} matches no outcome in its outputContract (§4.4).`,ref); });
+      }
     }
   }
 
@@ -628,7 +672,7 @@ function validate(model){
   for(const lane of model.lanesById.values()){
     (lane._mis||[]).forEach(m=> E('E-SCOPE-HOST',`<${esc(m)}> is attached to lane "${esc(lane.name||lane.id)}"; a lane may only carry laneEnhancement (§2.2).`,lane.id));
     if(!lane.enh) continue;
-    if(lane.enh.version!=='1.0') E('E-VERSION',`laneEnhancement on "${esc(lane.name||lane.id)}" has version="${esc(lane.enh.version)}"; must be "1.0".`,lane.id);
+    if(lane.enh.version!==V) E('E-VERSION',`laneEnhancement on "${esc(lane.name||lane.id)}" has version="${esc(lane.enh.version)}"; must be "${V}".`,lane.id);
     validateEnvelope(lane.enh.envelope,'scope',`lane "${esc(lane.name||lane.id)}"`,lane.id,E,W);
   }
   // --- participant enhancements ---
@@ -636,7 +680,7 @@ function validate(model){
     (part._mis||[]).forEach(m=> E('E-SCOPE-HOST',`<${esc(m)}> is attached to participant "${esc(part.name||part.id)}"; a participant may only carry participantEnhancement (§2.3).`,part.id));
     if(!part.enh) continue;
     const p=part.enh, where=`participant "${esc(part.name||part.id)}"`;
-    if(p.version!=='1.0') E('E-VERSION',`participantEnhancement on ${where} has version="${esc(p.version)}"; must be "1.0".`,part.id);
+    if(p.version!==V) E('E-VERSION',`participantEnhancement on ${where} has version="${esc(p.version)}"; must be "${V}".`,part.id);
     if(!p.hasDeterminism) E('E-DET-MISSING',`participantEnhancement on ${where} is missing the required determinism attribute (§3.1).`,part.id);
     if(p.boundary!=='blackBox'&&p.boundary!=='whiteBox') E('E-BOUNDARY',`boundary="${esc(p.boundary)}" on ${where} must be blackBox|whiteBox.`,part.id);
     if(p.agent && !p.agent.role) E('E-AGENT-ROLE',`agent on ${where} is missing role.`,part.id);
@@ -657,13 +701,34 @@ function validate(model){
     if(f.targetRef && !model.nodesById.has(f.targetRef)) W('W-FLOW-REF',`sequenceFlow ${esc(f.id)} targetRef ${esc(f.targetRef)} not found.`,f.id);
   }
 
-  if(!model.hasAnyBpmnx) W('W-NO-BPMNX','No BPMNx extensions found. This is a plain BPMN 2.0 document — valid, but nothing is AI-operated.',null);
+  if(!model.hasAnyBpmnx) W('W-NO-BPMNX','No BPMNx extensions found. This is a plain BPMN 2.0 document — valid, but nothing is agent-operated.',null);
 
   // summary
   const errors=out.filter(o=>o.severity==='error').length;
   if(errors===0) out.unshift({severity:'ok',code:'CONFORMANT',
-    message:'No conformance errors. Checked: scope-marker hosts, typed-event rule, version/determinism, envelope constraints, irreversible-on-scope-envelope, review/escalation refs, §6.3 contradictions, and §7.1 irreversible gating.',ref:null});
+    message:'No conformance errors. Checked: scope-marker hosts, typed-event rule, version/determinism, envelope constraints, irreversible-on-scope-envelope, review/escalation refs and reachability, §6.3 contradictions (participant/lane/element), §7.1 irreversible gating, and §4.4 gateway outcomes.',ref:null});
   return out;
+}
+
+/* ids reachable by sequence flow from `node`: its outgoing flows plus any boundary
+   event attached to it (§4.3). Used to keep onFailRef/targetRef on the drawn diagram. */
+function reachableFrom(model,node){
+  const starts=node.outgoing.map(fid=>model.flowsById.get(fid)).filter(Boolean).map(f=>f.targetRef);
+  for(const b of model.nodesById.values())
+    if(b.local==='boundaryEvent' && b.attachedToRef===node.id) starts.push(b.id);
+  const seen=new Set(), stack=[...starts];
+  while(stack.length){
+    const id=stack.pop(); if(seen.has(id)||!model.nodesById.has(id)) continue;
+    seen.add(id);
+    for(const fid of model.nodesById.get(id).outgoing){ const f=model.flowsById.get(fid); if(f) stack.push(f.targetRef); }
+  }
+  return seen;
+}
+/* outcomes declared by an outputContract of the form "a | b | c[, ...]" (§4.4) */
+function gatewayOutcomes(contract){
+  if(!contract) return [];
+  const m=/^\s*([A-Za-z0-9_.-]+(?:\s*\|\s*[A-Za-z0-9_.-]+)+)/.exec(contract);
+  return m ? m[1].split('|').map(s=>s.trim()).filter(Boolean) : [];
 }
 
 function validateEnvelope(env, kind, where, ref, E, W){
@@ -682,6 +747,8 @@ function validateEnvelope(env, kind, where, ref, E, W){
     E('E-TIMEBUDGET',`timeBudget="${esc(env.timeBudget)}" on ${where} is not an ISO-8601 duration.`,ref);
   env.toolAllow.concat(env.toolDeny).forEach(t=>{ if(!t.ref) E('E-TOOL-REF',`a tool element on ${where} is missing the required ref attribute.`,ref); });
 }
+
+/* @engine:end */
 
 /* ===================================================================
    UI LAYER — layout · SVG renderer · token simulator · inspector ·

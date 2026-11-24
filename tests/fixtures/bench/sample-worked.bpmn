@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    id="defs_worked" targetNamespace="http://example.org/worked">
+
+  <bpmn:process id="wproc" isExecutable="true">
+    <bpmn:laneSet>
+      <bpmn:lane id="wlane" name="AI lane (§6.5)">
+        <bpmn:extensionElements>
+          <bpmnx:laneEnhancement version="1.0">
+            <bpmnx:envelope confidenceThreshold="0.6" audited="true">
+              <bpmnx:toolDeny ref="email.send"/>
+            </bpmnx:envelope>
+          </bpmnx:laneEnhancement>
+        </bpmn:extensionElements>
+        <bpmn:flowNodeRef>wstart</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>wtask</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>wend</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="wstart" name="Start"><bpmn:outgoing>wf0</bpmn:outgoing></bpmn:startEvent>
+
+    <bpmn:serviceTask id="wtask" name="Element (§6.5)">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+          <bpmnx:agent role="assistant"/>
+          <bpmnx:envelope confidenceThreshold="0.8" irreversible="false">
+            <bpmnx:toolAllow ref="crm.read"/>
+            <bpmnx:toolAllow ref="email.send"/>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>wf0</bpmn:incoming><bpmn:outgoing>wf1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="wend" name="End"><bpmn:incoming>wf1</bpmn:incoming></bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="wf0" sourceRef="wstart" targetRef="wtask"/>
+    <bpmn:sequenceFlow id="wf1" sourceRef="wtask" targetRef="wend"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="wdiag">
+    <bpmndi:BPMNPlane id="wplane" bpmnElement="wproc">
+      <bpmndi:BPMNShape id="ws_lane" bpmnElement="wlane" isHorizontal="true">
+        <dc:Bounds x="40" y="60" width="700" height="180"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ws_start" bpmnElement="wstart">
+        <dc:Bounds x="90" y="132" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ws_task" bpmnElement="wtask">
+        <dc:Bounds x="280" y="114" width="150" height="74"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ws_end" bpmnElement="wend">
+        <dc:Bounds x="600" y="132" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="we_f0" bpmnElement="wf0"/>
+      <bpmndi:BPMNEdge id="we_f1" bpmnElement="wf1"/>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

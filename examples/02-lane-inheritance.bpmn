@@ -17,15 +17,10 @@
   email.send. A conformant validator FLAGS this contradiction (see
   validate_bpmnx.py output) even though the merge resolves it safely.
 
-  Run:  python3 tools/validate_bpmnx.py examples/02-lane-inheritance.bpmn
+  Run:  python tools/validate_bpmnx.py examples/02-lane-inheritance.bpmn
         python3 tools/resolve_policy.py examples/02-lane-inheritance.bpmn
   ============================================================================
--->
-<bpmn:definitions
-    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
-    id="Definitions_LaneInherit"
-    targetNamespace="http://bpmn.io/schema/bpmn">
+--><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_LaneInherit" targetNamespace="http://bpmn.io/schema/bpmn">
 
   <bpmn:process id="Process_LaneInherit" isExecutable="true">
 
@@ -33,7 +28,7 @@
       <!-- Standard BPMN lane carrying a BPMNx lane enhancement -->
       <bpmn:lane id="Lane_AI" name="AI Agent">
         <bpmn:extensionElements>
-          <bpmnx:laneEnhancement version="1.0">
+          <bpmnx:laneEnhancement version="1.1">
             <bpmnx:envelope confidenceThreshold="0.60" audited="true">
               <bpmnx:toolDeny ref="email.send">No element in this lane may send email</bpmnx:toolDeny>
               <bpmnx:toolDeny ref="billing">No billing system access anywhere in this lane</bpmnx:toolDeny>
@@ -58,7 +53,7 @@
     <!-- Enhanced element: tries to allow email.send (lane denies it) -->
     <bpmn:serviceTask id="Task_Classify" name="Classify Lead">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="classifier"/>
           <bpmnx:envelope confidenceThreshold="0.80">
             <bpmnx:toolAllow ref="crm.read">Read CRM data</bpmnx:toolAllow>
@@ -73,7 +68,7 @@
     <!-- Enhanced element: clean, inherits lane policy without conflict -->
     <bpmn:serviceTask id="Task_Draft" name="Draft Summary">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="writer"/>
           <bpmnx:envelope maxSteps="5">
             <bpmnx:toolAllow ref="crm.read">Read CRM data for context</bpmnx:toolAllow>
@@ -93,10 +88,56 @@
       <bpmn:incoming>F4</bpmn:incoming>
     </bpmn:endEvent>
 
-    <bpmn:sequenceFlow id="F1" sourceRef="Start_1"      targetRef="Task_Classify"/>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_1" targetRef="Task_Classify"/>
     <bpmn:sequenceFlow id="F2" sourceRef="Task_Classify" targetRef="Task_Draft"/>
-    <bpmn:sequenceFlow id="F3" sourceRef="Task_Draft"    targetRef="Task_Approve"/>
-    <bpmn:sequenceFlow id="F4" sourceRef="Task_Approve"  targetRef="End_1"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Task_Draft" targetRef="Task_Approve"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Task_Approve" targetRef="End_1"/>
 
   </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_LaneInherit">
+      <bpmndi:BPMNShape id="Lane_AI_di" bpmnElement="Lane_AI" isHorizontal="true">
+        <dc:Bounds x="40" y="40" width="960" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Human_di" bpmnElement="Lane_Human" isHorizontal="true">
+        <dc:Bounds x="40" y="200" width="960" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1">
+        <dc:Bounds x="177" y="262" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Classify_di" bpmnElement="Task_Classify">
+        <dc:Bounds x="310" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Draft_di" bpmnElement="Task_Draft">
+        <dc:Bounds x="480" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Approve_di" bpmnElement="Task_Approve">
+        <dc:Bounds x="650" y="240" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_1_di" bpmnElement="End_1">
+        <dc:Bounds x="857" y="262" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1">
+        <di:waypoint x="213" y="280"/>
+        <di:waypoint x="233" y="280"/>
+        <di:waypoint x="233" y="120"/>
+        <di:waypoint x="310" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2">
+        <di:waypoint x="420" y="120"/>
+        <di:waypoint x="480" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3">
+        <di:waypoint x="590" y="120"/>
+        <di:waypoint x="610" y="120"/>
+        <di:waypoint x="610" y="280"/>
+        <di:waypoint x="650" y="280"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4">
+        <di:waypoint x="760" y="280"/>
+        <di:waypoint x="857" y="280"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>

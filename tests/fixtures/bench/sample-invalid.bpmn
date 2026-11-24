@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    id="defs_bad" targetNamespace="http://example.org/bad">
+
+  <bpmn:process id="bproc" isExecutable="true">
+    <bpmn:laneSet>
+      <bpmn:lane id="blane" name="Broken lane">
+        <bpmn:extensionElements>
+          <bpmnx:laneEnhancement version="1.0">
+            <!-- irreversible is illegal on a scope envelope; threshold out of [0,1] -->
+            <bpmnx:envelope confidenceThreshold="1.5" irreversible="true">
+              <bpmnx:toolDeny ref="email.send"/>
+            </bpmnx:envelope>
+          </bpmnx:laneEnhancement>
+        </bpmn:extensionElements>
+        <bpmn:flowNodeRef>bstart</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>btask</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>bdisburse</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>bend</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- plain start event: not enhanceable -->
+    <bpmn:startEvent id="bstart" name="Start">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="deterministic"/>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>bf0</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- version not 1.0; determinism missing; dangling onFailRef + dangling escalation targetRef -->
+    <bpmn:serviceTask id="btask" name="Do work">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="2.0">
+          <bpmnx:agent role="worker"/>
+          <bpmnx:envelope>
+            <bpmnx:toolAllow ref="email.send"/>
+          </bpmnx:envelope>
+          <bpmnx:review kind="critic" onFailRef="ghostNode">
+            <bpmnx:criterion>output is valid</bpmnx:criterion>
+          </bpmnx:review>
+          <bpmnx:escalation when="stuck" targetRef="ghost2"/>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>bf0</bpmn:incoming><bpmn:outgoing>bf1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- irreversible with no human-controlled neighbor before side effect -->
+    <bpmn:serviceTask id="bdisburse" name="Wire money">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="deterministic">
+          <bpmnx:envelope irreversible="true">
+            <bpmnx:toolAllow ref="ledger.transfer"/>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>bf1</bpmn:incoming><bpmn:outgoing>bf2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- plain end event: not enhanceable -->
+    <bpmn:endEvent id="bend" name="End">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="deterministic"/>
+      </bpmn:extensionElements>
+      <bpmn:incoming>bf2</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="bf0" sourceRef="bstart" targetRef="btask"/>
+    <bpmn:sequenceFlow id="bf1" sourceRef="btask" targetRef="bdisburse"/>
+    <bpmn:sequenceFlow id="bf2" sourceRef="bdisburse" targetRef="bend"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="bdiag">
+    <bpmndi:BPMNPlane id="bplane" bpmnElement="bproc">
+      <bpmndi:BPMNShape id="bs_lane" bpmnElement="blane" isHorizontal="true">
+        <dc:Bounds x="40" y="60" width="860" height="170"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="bs_start" bpmnElement="bstart"><dc:Bounds x="90" y="128" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="bs_task" bpmnElement="btask"><dc:Bounds x="200" y="110" width="130" height="72"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="bs_disb" bpmnElement="bdisburse"><dc:Bounds x="430" y="110" width="130" height="72"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="bs_end" bpmnElement="bend"><dc:Bounds x="680" y="128" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="be_f0" bpmnElement="bf0"/>
+      <bpmndi:BPMNEdge id="be_f1" bpmnElement="bf1"/>
+      <bpmndi:BPMNEdge id="be_f2" bpmnElement="bf2"/>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
