@@ -1,0 +1,2023 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BPMNx Bench — test harness for BPMNx 1.0</title>
+<style>
+  :root{
+    --bg:#0F1218; --panel:#161A22; --raised:#1C2230; --raised2:#222A3A;
+    --line:#262D3B; --line2:#343E51;
+    --ink:#E7EBF2; --muted:#98A2B6; --faint:#616A7E;
+    --allow:#43C7A6; --deny:#FF6B6B; --irrev:#F5A524; --escal:#B197FC;
+    --audit:#5BA8FF; --token:#FFD36E; --accent:#43C7A6; --warn:#F5A524;
+    --det:#43C7A6; --nondet:#B197FC;
+    --font-ui: ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);
+    font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .eyebrow{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--faint)}
+  .mono{font-family:var(--font-mono)}
+  button{font-family:var(--font-ui);cursor:pointer}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---- top transport bar ---- */
+  header{
+    display:flex;align-items:center;gap:14px;padding:10px 16px;
+    background:linear-gradient(180deg,#171C26,#13171F);
+    border-bottom:1px solid var(--line);flex:0 0 auto;z-index:5;
+  }
+  .brand{display:flex;flex-direction:column;line-height:1.05;margin-right:6px}
+  .brand .name{font-family:var(--font-mono);font-weight:600;letter-spacing:.04em;font-size:15px}
+  .brand .name b{color:var(--accent);font-weight:600}
+  .brand .sub{font-size:10.5px;color:var(--faint);letter-spacing:.02em}
+  .spacer{flex:1}
+  .seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--raised)}
+  .seg button{background:transparent;border:0;color:var(--muted);padding:7px 11px;font-size:12.5px;
+    border-right:1px solid var(--line);display:flex;align-items:center;gap:6px}
+  .seg button:last-child{border-right:0}
+  .seg button:hover{background:var(--raised2);color:var(--ink)}
+  .seg button.primary{color:var(--bg);background:var(--accent);font-weight:600}
+  .seg button.primary:hover{filter:brightness(1.08)}
+  .seg button:disabled{opacity:.4;cursor:not-allowed}
+  .seg button.on{color:var(--ink);background:var(--raised2)}
+  select,.btn{
+    background:var(--raised);color:var(--ink);border:1px solid var(--line2);
+    border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:var(--font-ui);
+  }
+  select:hover,.btn:hover{border-color:var(--line2);background:var(--raised2)}
+  .btn.ghost{background:transparent}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;
+    font-family:var(--font-mono);font-size:11.5px;border:1px solid var(--line2);background:var(--raised)}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+  .pill.ok{border-color:rgba(67,199,166,.4)} .pill.ok .dot{background:var(--allow);box-shadow:0 0 8px var(--allow)}
+  .pill.err{border-color:rgba(255,107,107,.45)} .pill.err .dot{background:var(--deny);box-shadow:0 0 8px var(--deny)}
+  .pill.warnpill{border-color:rgba(245,165,36,.45)} .pill.warnpill .dot{background:var(--warn)}
+
+  /* ---- main grid ---- */
+  main{flex:1 1 auto;display:grid;grid-template-columns:1fr 372px;grid-template-rows:1fr 210px;
+    min-height:0;gap:1px;background:var(--line)}
+  .canvas-wrap{grid-row:1;grid-column:1;background:
+    radial-gradient(1200px 600px at 30% -10%, #181D27 0%, var(--bg) 60%);
+    position:relative;overflow:hidden;
+    user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
+  #canvas{position:absolute;inset:0;width:100%;height:100%}
+  #canvas text{user-select:none;-webkit-user-select:none;-moz-user-select:none}
+  .canvas-hint{position:absolute;left:16px;bottom:14px;font-size:11px;color:var(--faint);
+    font-family:var(--font-mono);pointer-events:none;background:rgba(15,18,24,.6);padding:4px 8px;border-radius:6px}
+  .legend{position:absolute;right:14px;top:14px;background:rgba(20,24,32,.82);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;backdrop-filter:blur(6px);max-width:210px}
+  .legend h4{margin:0 0 8px;font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);font-weight:600}
+  .legend .row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin:5px 0}
+  .legend .sw{width:13px;height:13px;border-radius:3px;flex:0 0 auto}
+
+  /* inspector */
+  .inspector{grid-row:1 / span 2;grid-column:2;background:var(--panel);overflow-y:auto;padding:0}
+  .insp-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;
+    background:linear-gradient(180deg,var(--panel),rgba(22,26,34,.92));backdrop-filter:blur(4px);z-index:2}
+  .insp-title{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:6px 0 2px}
+  .insp-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.03em;border:1px solid var(--line2)}
+  .chip.det{color:var(--det);border-color:rgba(67,199,166,.4);background:rgba(67,199,166,.08)}
+  .chip.nondet{color:var(--nondet);border-color:rgba(177,151,252,.4);background:rgba(177,151,252,.08)}
+  .chip.irrev{color:var(--irrev);border-color:rgba(245,165,36,.4);background:rgba(245,165,36,.08)}
+  .chip.audit{color:var(--audit);border-color:rgba(91,168,255,.4);background:rgba(91,168,255,.08)}
+  .insp-body{padding:8px 16px 28px}
+  .insp-empty{padding:40px 22px;color:var(--faint);text-align:center}
+  .insp-empty .big{font-size:34px;margin-bottom:10px;opacity:.5}
+  section.block{margin-top:18px}
+  section.block > .eyebrow{display:block;margin-bottom:9px}
+
+  /* scope-chain resolver — the signature element */
+  .resolver{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--raised)}
+  .scope-band{padding:9px 12px;border-bottom:1px solid var(--line);position:relative}
+  .scope-band:last-child{border-bottom:0}
+  .scope-band.element{background:linear-gradient(90deg,rgba(67,199,166,.06),transparent)}
+  .scope-band .sname{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);display:flex;align-items:center;gap:7px}
+  .scope-band .sname .tag{width:7px;height:7px;border-radius:2px}
+  .scope-band.participant .tag{background:#7C8AA8}
+  .scope-band.lane .tag{background:#9A7CC0}
+  .scope-band.element .tag{background:var(--accent)}
+  .scope-band .svals{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);margin-top:5px;
+    display:flex;flex-wrap:wrap;gap:5px 9px}
+  .kv{display:flex;align-items:baseline;gap:6px}
+  .kv b{color:var(--ink);font-weight:500}
+
+  /* effective policy table */
+  .eff{margin-top:12px;border:1px solid var(--line2);border-radius:12px;overflow:hidden}
+  .eff .efh{padding:8px 12px;background:var(--raised2);font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+  .effrow{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-top:1px solid var(--line)}
+  .effrow .f{flex:0 0 116px;color:var(--muted);font-size:12px}
+  .effrow .v{flex:1;font-family:var(--font-mono);font-size:12.5px;color:var(--ink);word-break:break-word}
+  .effrow .prov{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+    padding:1px 6px;border-radius:5px;color:var(--bg);align-self:center;white-space:nowrap}
+  .prov.participant{background:#7C8AA8} .prov.lane{background:#9A7CC0}
+  .prov.element{background:var(--accent)} .prov.none{background:transparent;color:var(--faint);border:1px solid var(--line2)}
+  .tool{display:inline-block;padding:2px 7px;border-radius:6px;margin:2px 3px 0 0;font-size:11.5px}
+  .tool.allow{background:rgba(67,199,166,.12);color:var(--allow);border:1px solid rgba(67,199,166,.3)}
+  .tool.deny{background:rgba(255,107,107,.1);color:var(--deny);border:1px solid rgba(255,107,107,.3)}
+  .tool.struck{color:var(--faint);text-decoration:line-through;border-color:var(--line2);background:transparent}
+
+  .note{font-size:11.5px;color:var(--muted);background:var(--raised);border:1px solid var(--line);
+    border-left:3px solid var(--escal);border-radius:8px;padding:9px 11px;margin-top:8px}
+  .note.amber{border-left-color:var(--irrev)}
+  .note.red{border-left-color:var(--deny)}
+  .review{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:8px;background:var(--raised)}
+  .review .rh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .review .rk{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px}
+  .rk.critic{background:rgba(91,168,255,.14);color:var(--audit)}
+  .rk.adversary{background:rgba(255,107,107,.13);color:var(--deny)}
+  .review ul{margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:12px}
+  .review .meta{font-family:var(--font-mono);font-size:10.5px;color:var(--faint);margin-top:6px}
+
+  /* bottom panel: validation + log */
+  .bottom{grid-row:2;grid-column:1;background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .tabs{display:flex;border-bottom:1px solid var(--line);flex:0 0 auto;align-items:center}
+  .minbtn{margin-left:auto;border:none;background:transparent;color:var(--faint);cursor:pointer;
+    font-size:13px;padding:0 14px;height:100%;line-height:1}
+  .minbtn:hover{color:var(--ink);background:rgba(255,255,255,.04)}
+  main.bottom-min{grid-template-rows:1fr 33px}
+  main.bottom-min .bottom .tabbody{display:none !important}
+  main.bottom-min .tabs{border-bottom:none}
+  .tabs button{background:transparent;border:0;color:var(--muted);padding:10px 15px;font-size:12.5px;
+    border-bottom:2px solid transparent;display:flex;align-items:center;gap:8px}
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+  .tabs button:hover{color:var(--ink)}
+  .count{font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:999px;background:var(--raised2);color:var(--muted)}
+  .count.err{background:rgba(255,107,107,.16);color:var(--deny)}
+  .count.warn{background:rgba(245,165,36,.16);color:var(--warn)}
+  .tabbody{flex:1;overflow-y:auto;padding:6px 0}
+  .vrow{display:flex;gap:10px;padding:7px 16px;border-bottom:1px solid rgba(38,45,59,.6);font-size:12.5px}
+  .vrow:hover{background:var(--raised)}
+  .vrow .sev{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px;height:fit-content;flex:0 0 auto}
+  .sev.error{background:rgba(255,107,107,.14);color:var(--deny)}
+  .sev.warning{background:rgba(245,165,36,.14);color:var(--warn)}
+  .sev.ok{background:rgba(67,199,166,.14);color:var(--allow)}
+  .vrow .vmsg{flex:1}
+  .vrow .vmsg .code{font-family:var(--font-mono);font-size:10.5px;color:var(--faint);margin-right:6px}
+  .vrow .vref{font-family:var(--font-mono);font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap}
+  .vrow .vref:hover{text-decoration:underline}
+  .logrow{display:flex;gap:10px;padding:5px 16px;font-family:var(--font-mono);font-size:11.5px;align-items:baseline}
+  .logrow .t{color:var(--faint);flex:0 0 38px}
+  .logrow .ico{flex:0 0 16px;text-align:center}
+  .logrow.escal{color:var(--escal)} .logrow.irrev{color:var(--irrev)}
+  .logrow.enter{color:var(--ink)} .logrow.sys{color:var(--muted)} .logrow.done{color:var(--allow)}
+
+  .drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(15,18,24,.85);z-index:20;border:2px dashed var(--accent);margin:10px;border-radius:14px}
+  .drop.show{display:flex}
+  .drop span{font-family:var(--font-mono);color:var(--accent);font-size:15px}
+  @media (max-width:920px){ main{grid-template-columns:1fr;grid-template-rows:1fr 280px 200px}
+    .inspector{grid-row:2;grid-column:1} .bottom{grid-row:3} .legend{display:none} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="name">BPMNx<b>·</b>Bench</span>
+    <span class="sub">test harness · BPMNx 1.0</span>
+  </div>
+  <select id="sampleSel" title="Built-in files">
+    <option value="conformant">Demo: conformant loan-review</option>
+    <option value="worked">Spec §6.5 worked example (contradiction)</option>
+    <option value="invalid">Invalid: multiple conformance errors</option>
+  </select>
+  <button class="btn ghost" id="loadBtn">Open file…</button>
+  <input type="file" id="fileInput" accept=".bpmn,.xml,.bpmnx" style="display:none">
+  <span class="spacer"></span>
+  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">no file</span></span>
+  <div class="seg" id="transport">
+    <button id="resetBtn" title="Reset tokens">⟲ Reset</button>
+    <button id="stepBtn" title="Advance one step">▸ Step</button>
+    <button id="runBtn" class="primary" title="Run / pause">▶ Run</button>
+  </div>
+  <select id="speedSel" title="Run speed">
+    <option value="900">0.5×</option>
+    <option value="550" selected>1×</option>
+    <option value="280">2×</option>
+    <option value="120">4×</option>
+  </select>
+  <div class="seg"><button id="manualBtn" class="on" title="Pick branches at AI gateways">⛢ Manual branch</button></div>
+</header>
+
+<main>
+  <div class="canvas-wrap" id="canvasWrap">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="legend" id="legend">
+      <h4>Reading the canvas</h4>
+      <div class="row"><span class="sw" style="background:var(--nondet)"></span>AI (nondeterministic)</div>
+      <div class="row"><span class="sw" style="background:var(--accent)"></span>Program (deterministic)</div>
+      <div class="row"><span class="sw" style="background:var(--irrev)"></span>irreversible gate</div>
+      <div class="row"><span class="sw" style="background:var(--escal)"></span>escalation defined</div>
+      <div class="row"><span class="sw" style="background:var(--audit)"></span>audited (effective)</div>
+      <div class="row"><span class="sw" style="background:var(--token);box-shadow:0 0 8px var(--token)"></span>live token</div>
+    </div>
+    <div class="canvas-hint" id="canvasHint">click any element or arrow to inspect · drag a .bpmn file in</div>
+    <div class="drop" id="dropZone"><span>drop BPMNx file to load</span></div>
+  </div>
+
+  <aside class="inspector" id="inspector">
+    <div class="insp-empty" id="inspEmpty">
+      <div class="big">◴</div>
+      Select an enhanced element on the canvas, or step a token through the
+      process. The resolved guardrail policy and its scope-chain provenance
+      appear here.
+    </div>
+  </aside>
+
+  <div class="bottom">
+    <div class="tabs">
+      <button id="tabValidate" class="on">Conformance <span class="count" id="vCount">0</span></button>
+      <button id="tabLog">Run log <span class="count" id="lCount">0</span></button>
+      <button id="minBtn" class="minbtn" title="Minimize panel" aria-label="Minimize panel">▾</button>
+    </div>
+    <div class="tabbody" id="validateBody"></div>
+    <div class="tabbody" id="logBody" style="display:none"></div>
+  </div>
+</main>
+
+<script id="samples" type="application/json">{"conformant": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions\n    xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n    xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n    xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\"\n    xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\"\n    xmlns:bpmnx=\"http://bpmnx.org/schema/1.0/bpmnx\"\n    id=\"defs_loan\" targetNamespace=\"http://example.org/loan\">\n\n  <bpmn:collaboration id=\"collab1\">\n    <bpmn:participant id=\"poolLender\" name=\"Lender\" processRef=\"loanProc\">\n      <bpmn:extensionElements>\n        <bpmnx:participantEnhancement version=\"1.0\" determinism=\"nondeterministic\" boundary=\"whiteBox\">\n          <bpmnx:envelope confidenceThreshold=\"0.5\" audited=\"true\">\n            <bpmnx:constraint type=\"compliance\">All decisions traceable to a human-reviewable record (FCRA).</bpmnx:constraint>\n          </bpmnx:envelope>\n        </bpmnx:participantEnhancement>\n      </bpmn:extensionElements>\n    </bpmn:participant>\n    <bpmn:participant id=\"poolUW\" name=\"AI Underwriting Service\">\n      <bpmn:extensionElements>\n        <bpmnx:participantEnhancement version=\"1.0\" determinism=\"nondeterministic\" boundary=\"blackBox\">\n          <bpmnx:agent role=\"external-underwriter\" modelClass=\"frontier-reasoning\"/>\n          <bpmnx:envelope confidenceThreshold=\"0.7\" audited=\"true\" timeBudget=\"PT30S\">\n            <bpmnx:toolDeny ref=\"pii.export\">may not export raw PII off-platform</bpmnx:toolDeny>\n          </bpmnx:envelope>\n          <bpmnx:review kind=\"critic\">\n            <bpmnx:criterion>score is justified by the supplied features only</bpmnx:criterion>\n          </bpmnx:review>\n        </bpmnx:participantEnhancement>\n      </bpmn:extensionElements>\n    </bpmn:participant>\n    <bpmn:messageFlow id=\"mf1\" name=\"risk request\" sourceRef=\"taskAssess\" targetRef=\"poolUW\"/>\n    <bpmn:messageFlow id=\"mf2\" name=\"risk score\" sourceRef=\"poolUW\" targetRef=\"taskAssess\"/>\n  </bpmn:collaboration>\n\n  <bpmn:process id=\"loanProc\" isExecutable=\"true\">\n    <bpmn:laneSet>\n      <bpmn:lane id=\"laneAI\" name=\"AI Operations\">\n        <bpmn:extensionElements>\n          <bpmnx:laneEnhancement version=\"1.0\">\n            <bpmnx:envelope confidenceThreshold=\"0.6\" audited=\"true\" maxSteps=\"12\" timeBudget=\"PT2M\">\n              <bpmnx:toolDeny ref=\"email.send\">no element in this band may send email</bpmnx:toolDeny>\n              <bpmnx:constraint type=\"policy\">log every tool call with inputs and outputs</bpmnx:constraint>\n            </bpmnx:envelope>\n          </bpmnx:laneEnhancement>\n        </bpmn:extensionElements>\n        <bpmn:flowNodeRef>startApp</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>taskAssess</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>gwApprove</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>taskApprove</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>taskDisburse</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>taskManual</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>endDone</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n\n    <bpmn:startEvent id=\"startApp\" name=\"Application received\">\n      <bpmn:outgoing>f0</bpmn:outgoing>\n    </bpmn:startEvent>\n\n    <bpmn:serviceTask id=\"taskAssess\" name=\"Assess application\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"nondeterministic\">\n          <bpmnx:agent role=\"underwriter\" modelClass=\"frontier-reasoning\">\n            <bpmnx:systemPrompt>Assess creditworthiness from the application packet. Cite every factor.</bpmnx:systemPrompt>\n            <bpmnx:outputContract>{ decision: approve|refer, score: 0-1, rationale: string }</bpmnx:outputContract>\n          </bpmnx:agent>\n          <bpmnx:envelope confidenceThreshold=\"0.8\" maxSteps=\"8\" timeBudget=\"PT45S\" retryPolicy=\"exponential-3\" irreversible=\"false\">\n            <bpmnx:toolAllow ref=\"crm.read\">read customer record</bpmnx:toolAllow>\n            <bpmnx:toolAllow ref=\"bureau.read\">pull credit bureau report</bpmnx:toolAllow>\n          </bpmnx:envelope>\n          <bpmnx:review kind=\"critic\" maxRetries=\"2\" onFailRef=\"taskManual\">\n            <bpmnx:criterion>decision matches the rationale</bpmnx:criterion>\n            <bpmnx:criterion>output conforms to the output contract</bpmnx:criterion>\n          </bpmnx:review>\n          <bpmnx:review kind=\"adversary\" maxRetries=\"1\" onFailRef=\"taskManual\">\n            <bpmnx:criterion>no protected-class proxy drove the score</bpmnx:criterion>\n          </bpmnx:review>\n          <bpmnx:escalation when=\"score &lt; confidenceThreshold\" targetRef=\"taskManual\" sla=\"PT4H\">low confidence routes to a human underwriter</bpmnx:escalation>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>f0</bpmn:incoming>\n      <bpmn:outgoing>f1</bpmn:outgoing>\n    </bpmn:serviceTask>\n\n    <bpmn:exclusiveGateway id=\"gwApprove\" name=\"Approve?\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"nondeterministic\">\n          <bpmnx:agent role=\"router\"/>\n          <bpmnx:envelope confidenceThreshold=\"0.75\"/>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>f1</bpmn:incoming>\n      <bpmn:outgoing>f2</bpmn:outgoing>\n      <bpmn:outgoing>f3</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n\n    <bpmn:userTask id=\"taskApprove\" name=\"Approve disbursement\">\n      <bpmn:incoming>f2</bpmn:incoming>\n      <bpmn:outgoing>f4</bpmn:outgoing>\n    </bpmn:userTask>\n\n    <bpmn:serviceTask id=\"taskDisburse\" name=\"Disburse funds\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"deterministic\">\n          <bpmnx:agent role=\"payments-agent\"/>\n          <bpmnx:envelope irreversible=\"true\" audited=\"true\" maxSteps=\"3\">\n            <bpmnx:toolAllow ref=\"ledger.transfer\">move funds to borrower account</bpmnx:toolAllow>\n          </bpmnx:envelope>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>f4</bpmn:incoming>\n      <bpmn:outgoing>f5</bpmn:outgoing>\n    </bpmn:serviceTask>\n\n    <bpmn:userTask id=\"taskManual\" name=\"Manual review\">\n      <bpmn:incoming>f3</bpmn:incoming>\n      <bpmn:outgoing>f6</bpmn:outgoing>\n    </bpmn:userTask>\n\n    <bpmn:endEvent id=\"endDone\" name=\"Done\">\n      <bpmn:incoming>f5</bpmn:incoming>\n      <bpmn:incoming>f6</bpmn:incoming>\n    </bpmn:endEvent>\n\n    <bpmn:sequenceFlow id=\"f0\" sourceRef=\"startApp\"   targetRef=\"taskAssess\"/>\n    <bpmn:sequenceFlow id=\"f1\" sourceRef=\"taskAssess\" targetRef=\"gwApprove\"/>\n    <bpmn:sequenceFlow id=\"f2\" name=\"approve\" sourceRef=\"gwApprove\" targetRef=\"taskApprove\"/>\n    <bpmn:sequenceFlow id=\"f3\" name=\"refer\"   sourceRef=\"gwApprove\" targetRef=\"taskManual\"/>\n    <bpmn:sequenceFlow id=\"f4\" sourceRef=\"taskApprove\" targetRef=\"taskDisburse\"/>\n    <bpmn:sequenceFlow id=\"f5\" sourceRef=\"taskDisburse\" targetRef=\"endDone\"/>\n    <bpmn:sequenceFlow id=\"f6\" sourceRef=\"taskManual\"  targetRef=\"endDone\"/>\n  </bpmn:process>\n\n  <bpmndi:BPMNDiagram id=\"diag\">\n    <bpmndi:BPMNPlane id=\"plane\" bpmnElement=\"collab1\">\n      <bpmndi:BPMNShape id=\"s_poolLender\" bpmnElement=\"poolLender\" isHorizontal=\"true\">\n        <dc:Bounds x=\"40\" y=\"40\" width=\"1010\" height=\"320\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_laneAI\" bpmnElement=\"laneAI\" isHorizontal=\"true\">\n        <dc:Bounds x=\"70\" y=\"40\" width=\"980\" height=\"320\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_startApp\" bpmnElement=\"startApp\">\n        <dc:Bounds x=\"100\" y=\"170\" width=\"36\" height=\"36\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_taskAssess\" bpmnElement=\"taskAssess\">\n        <dc:Bounds x=\"175\" y=\"152\" width=\"132\" height=\"74\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_gwApprove\" bpmnElement=\"gwApprove\" isMarkerVisible=\"true\">\n        <dc:Bounds x=\"355\" y=\"166\" width=\"46\" height=\"46\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_taskApprove\" bpmnElement=\"taskApprove\">\n        <dc:Bounds x=\"455\" y=\"80\" width=\"132\" height=\"68\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_taskDisburse\" bpmnElement=\"taskDisburse\">\n        <dc:Bounds x=\"640\" y=\"80\" width=\"132\" height=\"68\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_taskManual\" bpmnElement=\"taskManual\">\n        <dc:Bounds x=\"455\" y=\"244\" width=\"132\" height=\"68\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_endDone\" bpmnElement=\"endDone\">\n        <dc:Bounds x=\"840\" y=\"170\" width=\"36\" height=\"36\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"s_poolUW\" bpmnElement=\"poolUW\" isHorizontal=\"true\">\n        <dc:Bounds x=\"40\" y=\"392\" width=\"1010\" height=\"110\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"e_f0\" bpmnElement=\"f0\"/>\n      <bpmndi:BPMNEdge id=\"e_f1\" bpmnElement=\"f1\"/>\n      <bpmndi:BPMNEdge id=\"e_f2\" bpmnElement=\"f2\"/>\n      <bpmndi:BPMNEdge id=\"e_f3\" bpmnElement=\"f3\"/>\n      <bpmndi:BPMNEdge id=\"e_f4\" bpmnElement=\"f4\"/>\n      <bpmndi:BPMNEdge id=\"e_f5\" bpmnElement=\"f5\"/>\n      <bpmndi:BPMNEdge id=\"e_f6\" bpmnElement=\"f6\"/>\n      <bpmndi:BPMNEdge id=\"e_mf1\" bpmnElement=\"mf1\"/>\n      <bpmndi:BPMNEdge id=\"e_mf2\" bpmnElement=\"mf2\"/>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "worked": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions\n    xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n    xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n    xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\"\n    xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\"\n    xmlns:bpmnx=\"http://bpmnx.org/schema/1.0/bpmnx\"\n    id=\"defs_worked\" targetNamespace=\"http://example.org/worked\">\n\n  <bpmn:process id=\"wproc\" isExecutable=\"true\">\n    <bpmn:laneSet>\n      <bpmn:lane id=\"wlane\" name=\"AI lane (\u00a76.5)\">\n        <bpmn:extensionElements>\n          <bpmnx:laneEnhancement version=\"1.0\">\n            <bpmnx:envelope confidenceThreshold=\"0.6\" audited=\"true\">\n              <bpmnx:toolDeny ref=\"email.send\"/>\n            </bpmnx:envelope>\n          </bpmnx:laneEnhancement>\n        </bpmn:extensionElements>\n        <bpmn:flowNodeRef>wstart</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>wtask</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>wend</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n\n    <bpmn:startEvent id=\"wstart\" name=\"Start\"><bpmn:outgoing>wf0</bpmn:outgoing></bpmn:startEvent>\n\n    <bpmn:serviceTask id=\"wtask\" name=\"Element (\u00a76.5)\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"nondeterministic\">\n          <bpmnx:agent role=\"assistant\"/>\n          <bpmnx:envelope confidenceThreshold=\"0.8\" irreversible=\"false\">\n            <bpmnx:toolAllow ref=\"crm.read\"/>\n            <bpmnx:toolAllow ref=\"email.send\"/>\n          </bpmnx:envelope>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>wf0</bpmn:incoming><bpmn:outgoing>wf1</bpmn:outgoing>\n    </bpmn:serviceTask>\n\n    <bpmn:endEvent id=\"wend\" name=\"End\"><bpmn:incoming>wf1</bpmn:incoming></bpmn:endEvent>\n\n    <bpmn:sequenceFlow id=\"wf0\" sourceRef=\"wstart\" targetRef=\"wtask\"/>\n    <bpmn:sequenceFlow id=\"wf1\" sourceRef=\"wtask\" targetRef=\"wend\"/>\n  </bpmn:process>\n\n  <bpmndi:BPMNDiagram id=\"wdiag\">\n    <bpmndi:BPMNPlane id=\"wplane\" bpmnElement=\"wproc\">\n      <bpmndi:BPMNShape id=\"ws_lane\" bpmnElement=\"wlane\" isHorizontal=\"true\">\n        <dc:Bounds x=\"40\" y=\"60\" width=\"700\" height=\"180\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"ws_start\" bpmnElement=\"wstart\">\n        <dc:Bounds x=\"90\" y=\"132\" width=\"36\" height=\"36\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"ws_task\" bpmnElement=\"wtask\">\n        <dc:Bounds x=\"280\" y=\"114\" width=\"150\" height=\"74\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"ws_end\" bpmnElement=\"wend\">\n        <dc:Bounds x=\"600\" y=\"132\" width=\"36\" height=\"36\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"we_f0\" bpmnElement=\"wf0\"/>\n      <bpmndi:BPMNEdge id=\"we_f1\" bpmnElement=\"wf1\"/>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "invalid": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions\n    xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n    xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n    xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\"\n    xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\"\n    xmlns:bpmnx=\"http://bpmnx.org/schema/1.0/bpmnx\"\n    id=\"defs_bad\" targetNamespace=\"http://example.org/bad\">\n\n  <bpmn:process id=\"bproc\" isExecutable=\"true\">\n    <bpmn:laneSet>\n      <bpmn:lane id=\"blane\" name=\"Broken lane\">\n        <bpmn:extensionElements>\n          <bpmnx:laneEnhancement version=\"1.0\">\n            <!-- irreversible is illegal on a scope envelope; threshold out of [0,1] -->\n            <bpmnx:envelope confidenceThreshold=\"1.5\" irreversible=\"true\">\n              <bpmnx:toolDeny ref=\"email.send\"/>\n            </bpmnx:envelope>\n          </bpmnx:laneEnhancement>\n        </bpmn:extensionElements>\n        <bpmn:flowNodeRef>bstart</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>btask</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>bdisburse</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>bend</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n\n    <!-- plain start event: not enhanceable -->\n    <bpmn:startEvent id=\"bstart\" name=\"Start\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"deterministic\"/>\n      </bpmn:extensionElements>\n      <bpmn:outgoing>bf0</bpmn:outgoing>\n    </bpmn:startEvent>\n\n    <!-- version not 1.0; determinism missing; dangling onFailRef + dangling escalation targetRef -->\n    <bpmn:serviceTask id=\"btask\" name=\"Do work\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"2.0\">\n          <bpmnx:agent role=\"worker\"/>\n          <bpmnx:envelope>\n            <bpmnx:toolAllow ref=\"email.send\"/>\n          </bpmnx:envelope>\n          <bpmnx:review kind=\"critic\" onFailRef=\"ghostNode\">\n            <bpmnx:criterion>output is valid</bpmnx:criterion>\n          </bpmnx:review>\n          <bpmnx:escalation when=\"stuck\" targetRef=\"ghost2\"/>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>bf0</bpmn:incoming><bpmn:outgoing>bf1</bpmn:outgoing>\n    </bpmn:serviceTask>\n\n    <!-- irreversible with no human-controlled neighbor before side effect -->\n    <bpmn:serviceTask id=\"bdisburse\" name=\"Wire money\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"deterministic\">\n          <bpmnx:envelope irreversible=\"true\">\n            <bpmnx:toolAllow ref=\"ledger.transfer\"/>\n          </bpmnx:envelope>\n        </bpmnx:enhancement>\n      </bpmn:extensionElements>\n      <bpmn:incoming>bf1</bpmn:incoming><bpmn:outgoing>bf2</bpmn:outgoing>\n    </bpmn:serviceTask>\n\n    <!-- plain end event: not enhanceable -->\n    <bpmn:endEvent id=\"bend\" name=\"End\">\n      <bpmn:extensionElements>\n        <bpmnx:enhancement version=\"1.0\" determinism=\"deterministic\"/>\n      </bpmn:extensionElements>\n      <bpmn:incoming>bf2</bpmn:incoming>\n    </bpmn:endEvent>\n\n    <bpmn:sequenceFlow id=\"bf0\" sourceRef=\"bstart\" targetRef=\"btask\"/>\n    <bpmn:sequenceFlow id=\"bf1\" sourceRef=\"btask\" targetRef=\"bdisburse\"/>\n    <bpmn:sequenceFlow id=\"bf2\" sourceRef=\"bdisburse\" targetRef=\"bend\"/>\n  </bpmn:process>\n\n  <bpmndi:BPMNDiagram id=\"bdiag\">\n    <bpmndi:BPMNPlane id=\"bplane\" bpmnElement=\"bproc\">\n      <bpmndi:BPMNShape id=\"bs_lane\" bpmnElement=\"blane\" isHorizontal=\"true\">\n        <dc:Bounds x=\"40\" y=\"60\" width=\"860\" height=\"170\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"bs_start\" bpmnElement=\"bstart\"><dc:Bounds x=\"90\" y=\"128\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"bs_task\" bpmnElement=\"btask\"><dc:Bounds x=\"200\" y=\"110\" width=\"130\" height=\"72\"/></bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"bs_disb\" bpmnElement=\"bdisburse\"><dc:Bounds x=\"430\" y=\"110\" width=\"130\" height=\"72\"/></bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"bs_end\" bpmnElement=\"bend\"><dc:Bounds x=\"680\" y=\"128\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"be_f0\" bpmnElement=\"bf0\"/>\n      <bpmndi:BPMNEdge id=\"be_f1\" bpmnElement=\"bf1\"/>\n      <bpmndi:BPMNEdge id=\"be_f2\" bpmnElement=\"bf2\"/>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n"}</script>
+<script>
+/* ===================================================================
+   BPMNx Bench — application logic
+   Parser · Validator · §6 policy engine · token simulator · renderer
+   =================================================================== */
+'use strict';
+const BPMN ='http://www.omg.org/spec/BPMN/20100524/MODEL';
+const BPMNX='http://bpmnx.org/schema/1.0/bpmnx';
+const DI  ='http://www.omg.org/spec/BPMN/20100524/DI';
+const DC  ='http://www.omg.org/spec/DD/20100524/DC';
+const DIW ='http://www.omg.org/spec/DD/20100524/DI';
+
+const TASK_TYPES = new Set(['task','serviceTask','userTask','businessRuleTask','scriptTask',
+  'sendTask','receiveTask','manualTask','callActivity']);
+const SUBPROC_TYPES = new Set(['subProcess','transaction','adHocSubProcess']);
+const HUMAN_TYPES = new Set(['userTask','manualTask']);
+const ENH_GATEWAYS = new Set(['exclusiveGateway','inclusiveGateway']);
+
+const $  = (s,r=document)=>r.querySelector(s);
+const el = (tag,cls)=>{const e=document.createElement(tag); if(cls)e.className=cls; return e;};
+const svgEl = (tag)=>document.createElementNS('http://www.w3.org/2000/svg',tag);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---- DOM ns helpers ---- */
+const kids = (n,ns,local)=>[...n.childNodes].filter(c=>c.nodeType===1 && c.namespaceURI===ns && c.localName===local);
+const kid  = (n,ns,local)=>kids(n,ns,local)[0]||null;
+const descAll=(r,ns,local)=>[...r.getElementsByTagNameNS(ns,local)];
+const txt  = n=>n?(n.textContent||'').trim():'';
+
+/* ---- ISO-8601 duration -> seconds (approx, comparison only) ---- */
+function durationToSeconds(d){
+  if(!d) return null;
+  const m=/^(-)?P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)W)?(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(d.trim());
+  if(!m) return NaN;
+  const f=x=>parseFloat(x||0);
+  const s=f(m[2])*31536000+f(m[3])*2592000+f(m[4])*604800+f(m[5])*86400+f(m[6])*3600+f(m[7])*60+f(m[8]);
+  return m[1]==='-'?-s:s;
+}
+
+/* ===================================================================
+   PARSER  — produces the model the rest of the app consumes
+   =================================================================== */
+function parseEnvelope(envNode, scope){
+  // scope: 'element' uses tEnvelope (irreversible allowed); 'scope' uses tScopeEnvelope
+  if(!envNode) return null;
+  const e={
+    toolAllow:[], toolDeny:[], constraints:[],
+    confidenceThreshold:null, confRaw:null, maxSteps:null, maxStepsRaw:null,
+    timeBudget:null, retryPolicy:null, audited:false, irreversible:false,
+    hasIrreversibleAttr:false
+  };
+  kids(envNode,BPMNX,'toolAllow').forEach(t=>e.toolAllow.push({ref:t.getAttribute('ref'), label:txt(t)}));
+  kids(envNode,BPMNX,'toolDeny').forEach(t=>e.toolDeny.push({ref:t.getAttribute('ref'), label:txt(t)}));
+  kids(envNode,BPMNX,'constraint').forEach(c=>e.constraints.push({type:c.getAttribute('type'), text:txt(c)}));
+  const ct=envNode.getAttribute('confidenceThreshold');
+  if(ct!=null){ e.confRaw=ct; e.confidenceThreshold=parseFloat(ct); }
+  const ms=envNode.getAttribute('maxSteps');
+  if(ms!=null){ e.maxStepsRaw=ms; e.maxSteps=parseInt(ms,10); }
+  e.timeBudget=envNode.getAttribute('timeBudget');
+  e.retryPolicy=envNode.getAttribute('retryPolicy');
+  e.audited=envNode.getAttribute('audited')==='true';
+  if(envNode.hasAttribute('irreversible')){
+    e.hasIrreversibleAttr=true;
+    e.irreversible=envNode.getAttribute('irreversible')==='true';
+  }
+  return e;
+}
+function parseAgent(a){
+  if(!a) return null;
+  return {
+    role:a.getAttribute('role'), modelClass:a.getAttribute('modelClass'),
+    systemPrompt:txt(kid(a,BPMNX,'systemPrompt')),
+    inputContract:txt(kid(a,BPMNX,'inputContract')),
+    outputContract:txt(kid(a,BPMNX,'outputContract'))
+  };
+}
+function parseReviews(parent){
+  return kids(parent,BPMNX,'review').map(r=>({
+    kind:r.getAttribute('kind'),
+    maxRetries:r.hasAttribute('maxRetries')?parseInt(r.getAttribute('maxRetries'),10):2,
+    onFailRef:r.getAttribute('onFailRef'),
+    criteria:kids(r,BPMNX,'criterion').map(txt)
+  }));
+}
+function parseEscalations(parent){
+  return kids(parent,BPMNX,'escalation').map(s=>({
+    when:s.getAttribute('when'), targetRef:s.getAttribute('targetRef'),
+    sla:s.getAttribute('sla'), text:txt(s)
+  }));
+}
+function parseProperties(parent){
+  return kids(parent,BPMNX,'property').map(p=>({name:p.getAttribute('name'), value:txt(p)}));
+}
+function getEnhancementNode(hostEl, localName){
+  const ext=kid(hostEl,BPMN,'extensionElements'); if(!ext) return null;
+  return kid(ext,BPMNX,localName);
+}
+function parseElementEnhancement(node){
+  return {
+    kind:'element', version:node.getAttribute('version'),
+    determinism:node.getAttribute('determinism'),
+    hasDeterminism:node.hasAttribute('determinism'),
+    agent:parseAgent(kid(node,BPMNX,'agent')),
+    envelope:parseEnvelope(kid(node,BPMNX,'envelope'),'element'),
+    reviews:parseReviews(node), escalations:parseEscalations(node),
+    properties:parseProperties(node)
+  };
+}
+function parseLaneEnhancement(node){
+  return { kind:'lane', version:node.getAttribute('version'),
+    envelope:parseEnvelope(kid(node,BPMNX,'envelope'),'scope'),
+    properties:parseProperties(node) };
+}
+function parseParticipantEnhancement(node){
+  return { kind:'participant', version:node.getAttribute('version'),
+    determinism:node.getAttribute('determinism'), hasDeterminism:node.hasAttribute('determinism'),
+    boundary:node.getAttribute('boundary')||'blackBox',
+    agent:parseAgent(kid(node,BPMNX,'agent')),
+    envelope:parseEnvelope(kid(node,BPMNX,'envelope'),'scope'),
+    reviews:parseReviews(node), properties:parseProperties(node) };
+}
+
+function parseModel(xmlText){
+  const doc=new DOMParser().parseFromString(xmlText,'application/xml');
+  const perr=doc.querySelector('parsererror');
+  if(perr) return {ok:false, parseError:perr.textContent};
+  const defs=doc.documentElement;
+  if(!defs || defs.localName!=='definitions')
+    return {ok:false, parseError:'Root element is not <bpmn:definitions>. Not a BPMN 2.0 document.'};
+
+  const model={ ok:true, doc, defs,
+    nodesById:new Map(), flowsById:new Map(), messageFlows:[],
+    lanesById:new Map(), participantsById:new Map(), processesById:new Map(),
+    diShapes:new Map(), diEdges:new Map(), hasAnyBpmnx:false, collaborationId:null };
+
+  // collaboration / participants
+  const collab=descAll(defs,BPMN,'collaboration')[0];
+  if(collab) model.collaborationId=collab.getAttribute('id');
+  descAll(defs,BPMN,'participant').forEach(p=>{
+    const id=p.getAttribute('id');
+    const part={ id, name:p.getAttribute('name'), processRef:p.getAttribute('processRef'),
+      enh:null, boundary:null, hostLocal:'participant' };
+    const enhNode=getEnhancementNode(p,'participantEnhancement');
+    if(enhNode){ part.enh=parseParticipantEnhancement(enhNode); part.boundary=part.enh.boundary; model.hasAnyBpmnx=true; }
+    // misattached scope markers (laneEnhancement/enhancement on a participant)
+    part._mis = collectMisattached(p, 'participant');
+    model.participantsById.set(id,part);
+  });
+  descAll(defs,BPMN,'messageFlow').forEach(mf=>model.messageFlows.push({
+    id:mf.getAttribute('id'), name:mf.getAttribute('name'),
+    sourceRef:mf.getAttribute('sourceRef'), targetRef:mf.getAttribute('targetRef')}));
+
+  // processes
+  descAll(defs,BPMN,'process').forEach(proc=>{
+    const pid=proc.getAttribute('id');
+    const procObj={id:pid, laneIds:[], nodeIds:[]};
+    model.processesById.set(pid,procObj);
+
+    // lanes
+    descAll(proc,BPMN,'lane').forEach(l=>{
+      const id=l.getAttribute('id');
+      const lane={id, name:l.getAttribute('name'), processId:pid,
+        flowNodeRefs:kids(l,BPMN,'flowNodeRef').map(txt), enh:null, hostLocal:'lane'};
+      const enhNode=getEnhancementNode(l,'laneEnhancement');
+      if(enhNode){ lane.enh=parseLaneEnhancement(enhNode); model.hasAnyBpmnx=true; }
+      lane._mis=collectMisattached(l,'lane');
+      model.lanesById.set(id,lane); procObj.laneIds.push(id);
+    });
+
+    // flow nodes (everything that is a child flow element of the process)
+    const FLOW_LOCALS=new Set([...TASK_TYPES,...SUBPROC_TYPES,
+      'exclusiveGateway','inclusiveGateway','parallelGateway','eventBasedGateway','complexGateway',
+      'startEvent','endEvent','intermediateCatchEvent','intermediateThrowEvent','boundaryEvent']);
+    [...proc.childNodes].filter(c=>c.nodeType===1 && c.namespaceURI===BPMN && FLOW_LOCALS.has(c.localName))
+      .forEach(n=>{
+        const id=n.getAttribute('id');
+        const eventDefs=[...n.childNodes].filter(c=>c.nodeType===1 && c.namespaceURI===BPMN && /EventDefinition$/.test(c.localName)).map(c=>c.localName);
+        const node={ id, local:n.localName, name:n.getAttribute('name'), processId:pid,
+          eventDefs, incoming:kids(n,BPMN,'incoming').map(txt), outgoing:kids(n,BPMN,'outgoing').map(txt),
+          default:n.getAttribute('default'),
+          enh:null, laneId:null, participantId:null, bounds:null };
+        const enhNode=getEnhancementNode(n,'enhancement');
+        if(enhNode){ node.enh=parseElementEnhancement(enhNode); model.hasAnyBpmnx=true; }
+        node._misLane=getEnhancementNode(n,'laneEnhancement');
+        node._misPart=getEnhancementNode(n,'participantEnhancement');
+        model.nodesById.set(id,node); procObj.nodeIds.push(id);
+      });
+
+    // sequence flows
+    descAll(proc,BPMN,'sequenceFlow').forEach(f=>{
+      const id=f.getAttribute('id');
+      const flow={id, name:f.getAttribute('name'), sourceRef:f.getAttribute('sourceRef'),
+        targetRef:f.getAttribute('targetRef'), processId:pid, enh:getEnhancementNode(f,'enhancement'),
+        condition:txt(kid(f,BPMN,'conditionExpression'))||null};
+      model.flowsById.set(id,flow);
+    });
+  });
+
+  // map node -> lane
+  for(const lane of model.lanesById.values())
+    lane.flowNodeRefs.forEach(ref=>{ const n=model.nodesById.get(ref); if(n) n.laneId=lane.id; });
+  // map node -> participant (via processRef)
+  for(const part of model.participantsById.values()){
+    const proc=model.processesById.get(part.processRef);
+    if(proc) proc.nodeIds.forEach(nid=>{ const n=model.nodesById.get(nid); if(n) n.participantId=part.id; });
+  }
+
+  // DI
+  [...defs.getElementsByTagNameNS(DI,'BPMNShape')].forEach(sh=>{
+    const be=sh.getAttribute('bpmnElement'); const b=kid(sh,DC,'Bounds'); if(!be||!b) return;
+    model.diShapes.set(be,{x:+b.getAttribute('x'),y:+b.getAttribute('y'),
+      width:+b.getAttribute('width'),height:+b.getAttribute('height'),
+      isHorizontal:sh.getAttribute('isHorizontal')==='true'});
+  });
+  [...defs.getElementsByTagNameNS(DI,'BPMNEdge')].forEach(ed=>{
+    const be=ed.getAttribute('bpmnElement');
+    const wps=kids(ed,DIW,'waypoint').map(w=>({x:+w.getAttribute('x'),y:+w.getAttribute('y')}));
+    if(be && wps.length) model.diEdges.set(be,wps);
+  });
+
+  return model;
+}
+
+// collect bpmnx markers attached to a host where they don't belong (for validator)
+function collectMisattached(hostEl, hostKind){
+  const ext=kid(hostEl,BPMN,'extensionElements'); if(!ext) return [];
+  const out=[];
+  ['enhancement','laneEnhancement','participantEnhancement'].forEach(m=>{
+    const proper = (hostKind==='participant'&&m==='participantEnhancement')
+                || (hostKind==='lane'&&m==='laneEnhancement');
+    if(!proper && kid(ext,BPMNX,m)) out.push(m);
+  });
+  return out;
+}
+
+/* ===================================================================
+   §6 POLICY ENGINE — effective policy with scope-chain provenance
+   =================================================================== */
+function scopeChain(model, node){
+  // broadest -> narrowest: [participant?(whiteBox), lane?, element]
+  const chain=[];
+  if(node.participantId){
+    const p=model.participantsById.get(node.participantId);
+    if(p && p.enh && p.boundary==='whiteBox' && p.enh.envelope)
+      chain.push({scope:'participant', env:p.enh.envelope, owner:p});
+  }
+  if(node.laneId){
+    const l=model.lanesById.get(node.laneId);
+    if(l && l.enh && l.enh.envelope) chain.push({scope:'lane', env:l.enh.envelope, owner:l});
+  }
+  const elEnv = node.enh ? (node.enh.envelope||{toolAllow:[],toolDeny:[],constraints:[]}) : null;
+  if(elEnv) chain.push({scope:'element', env:elEnv, owner:node});
+  return chain;
+}
+
+function effectivePolicy(model, node){
+  const chain=scopeChain(model,node);
+  const denyMap=new Map(), allowMap=new Map();
+  const constraints=[];
+  let conf={val:null,from:'none'}, steps={val:null,from:'none'},
+      time={val:null,secs:null,from:'none'}, retry={val:null,from:'none'},
+      audited={val:false,from:'none'}, irrev={val:false,from:'none'};
+
+  for(const n of chain){
+    const e=n.env||{};
+    (e.toolDeny||[]).forEach(t=>{ if(t.ref&&!denyMap.has(t.ref)) denyMap.set(t.ref,n.scope); });
+    (e.toolAllow||[]).forEach(t=>{ if(t.ref&&!allowMap.has(t.ref)) allowMap.set(t.ref,n.scope); });
+    (e.constraints||[]).forEach(c=>constraints.push({...c,from:n.scope}));
+    if(e.confidenceThreshold!=null && !Number.isNaN(e.confidenceThreshold))
+      if(conf.val==null||e.confidenceThreshold>conf.val) conf={val:e.confidenceThreshold,from:n.scope};
+    if(e.maxSteps!=null && !Number.isNaN(e.maxSteps))
+      if(steps.val==null||e.maxSteps<steps.val) steps={val:e.maxSteps,from:n.scope};
+    if(e.timeBudget!=null){ const s=durationToSeconds(e.timeBudget);
+      if(!Number.isNaN(s)&&(time.secs==null||s<time.secs)) time={val:e.timeBudget,secs:s,from:n.scope}; }
+    if(e.retryPolicy!=null) retry={val:e.retryPolicy,from:n.scope};       // narrower wins
+    if(e.audited===true && !audited.val) audited={val:true,from:n.scope}; // logical OR
+    if(n.scope==='element' && e.irreversible===true) irrev={val:true,from:'element'};
+  }
+
+  const allow=[], overridden=[];
+  for(const [ref,scope] of allowMap){
+    if(denyMap.has(ref)) overridden.push({ref,allowedBy:scope,deniedBy:denyMap.get(ref)});
+    else allow.push({ref,from:scope});
+  }
+  return {
+    chain,
+    toolDeny:[...denyMap].map(([ref,from])=>({ref,from})),
+    toolAllow:allow, overridden,
+    constraints, confidenceThreshold:conf, maxSteps:steps, timeBudget:time,
+    retryPolicy:retry, audited, irreversible:irrev
+  };
+}
+
+/* ===================================================================
+   §7 VALIDATOR — conformance checks (XSD constraints + §7.1 rules)
+   =================================================================== */
+function validate(model){
+  const out=[];
+  const E=(code,message,ref)=>out.push({severity:'error',code,message,ref});
+  const W=(code,message,ref)=>out.push({severity:'warning',code,message,ref});
+
+  const elementHostOk = node => {
+    if(TASK_TYPES.has(node.local)||SUBPROC_TYPES.has(node.local)) return true;
+    if(ENH_GATEWAYS.has(node.local)) return true;
+    if(node.local==='intermediateCatchEvent') return true;
+    if(node.local==='startEvent'||node.local==='endEvent') return node.eventDefs.length>0; // typed only
+    return false;
+  };
+  const disallowedReason = node => {
+    if(node.local==='startEvent'||node.local==='endEvent')
+      return `a plain ${node.local} (no eventDefinition) carries no judgment to bound (§2.1)`;
+    if(node.local==='parallelGateway'||node.local==='eventBasedGateway'||node.local==='complexGateway')
+      return `a ${node.local} is not an enhanceable host; only exclusive/inclusive gateways are (§2.1)`;
+    if(node.local==='intermediateThrowEvent'||node.local==='boundaryEvent')
+      return `a ${node.local} is not in the enhanceable set (§2.1)`;
+    return `${node.local} is not an enhanceable host (§2.1)`;
+  };
+
+  // --- per element-enhancement checks ---
+  for(const node of model.nodesById.values()){
+    if(node._misLane) E('E-SCOPE-HOST',`laneEnhancement is attached to <${node.local}>; it may only attach to a bpmn:lane (§2.2).`,node.id);
+    if(node._misPart) E('E-SCOPE-HOST',`participantEnhancement is attached to <${node.local}>; it may only attach to a bpmn:participant (§2.3).`,node.id);
+    if(!node.enh) continue;
+    const enh=node.enh, ref=node.id, where=node.name?`"${node.name}"`:node.id;
+
+    if(!elementHostOk(node)) E('E-HOST',`enhancement on ${where} is invalid: ${disallowedReason(node)}.`,ref);
+
+    if(enh.version!=='1.0') E('E-VERSION',`enhancement on ${where} has version="${esc(enh.version)}"; BPMNx 1.0 fixes it to "1.0".`,ref);
+    if(!enh.hasDeterminism) E('E-DET-MISSING',`enhancement on ${where} is missing the required determinism attribute (§3.1).`,ref);
+    else if(enh.determinism!=='deterministic'&&enh.determinism!=='nondeterministic')
+      E('E-DET-ENUM',`determinism="${esc(enh.determinism)}" on ${where} is not deterministic|nondeterministic.`,ref);
+
+    if(enh.agent && !enh.agent.role) E('E-AGENT-ROLE',`agent on ${where} is missing the required role attribute.`,ref);
+
+    validateEnvelope(enh.envelope, 'element', where, ref, E, W);
+
+    // reviews
+    enh.reviews.forEach((r,i)=>{
+      if(r.kind!=='critic'&&r.kind!=='adversary') E('E-REVIEW-KIND',`review #${i+1} on ${where} has kind="${esc(r.kind)}"; must be critic|adversary (§4).`,ref);
+      if(!r.criteria.length) E('E-REVIEW-CRIT',`review #${i+1} on ${where} declares no <criterion> (at least one required).`,ref);
+      if(r.onFailRef && !model.nodesById.has(r.onFailRef))
+        E('E-ONFAILREF',`review onFailRef="${esc(r.onFailRef)}" on ${where} does not resolve to an element id (§7.1).`,ref);
+      if(!Number.isNaN(r.maxRetries) && r.maxRetries<0) E('E-MAXRETRIES',`review maxRetries on ${where} must be ≥ 0.`,ref);
+    });
+    // escalations
+    enh.escalations.forEach((s,i)=>{
+      if(!s.when) E('E-ESCAL-WHEN',`escalation #${i+1} on ${where} is missing the required when attribute (§4).`,ref);
+      if(s.targetRef && !model.nodesById.has(s.targetRef))
+        E('E-TARGETREF',`escalation targetRef="${esc(s.targetRef)}" on ${where} does not resolve to an element id (§7.1).`,ref);
+      if(s.sla && Number.isNaN(durationToSeconds(s.sla)))
+        E('E-SLA',`escalation sla="${esc(s.sla)}" on ${where} is not an ISO-8601 duration.`,ref);
+    });
+
+    // §6.3 contradiction — a tool allowed somewhere in the chain is denied elsewhere in it
+    const pol=effectivePolicy(model,node);
+    pol.overridden.forEach(o=>{
+      E('E-CONTRADICTION',`on ${where}, tool "${esc(o.ref)}" is allowed at the ${o.allowedBy} scope but denied at the ${o.deniedBy} scope. The merge resolves safely (denial wins) but §6.3 requires this contradiction be flagged.`,ref);
+    });
+
+    // §7.1 irreversible must be gated by a human-controlled element before side effect
+    if(pol.irreversible.val){
+      const preds=node.incoming.map(fid=>model.flowsById.get(fid)).filter(Boolean).map(f=>model.nodesById.get(f.sourceRef)).filter(Boolean);
+      const succs=node.outgoing.map(fid=>model.flowsById.get(fid)).filter(Boolean).map(f=>model.nodesById.get(f.targetRef)).filter(Boolean);
+      const humanPred=preds.some(p=>HUMAN_TYPES.has(p.local));
+      const humanSucc=succs.some(s=>HUMAN_TYPES.has(s.local));
+      if(humanPred){ /* ok: approval precedes the side effect (§5.1) */ }
+      else if(humanSucc) W('W-IRREV-AFTER',`irreversible action ${where} is followed by a human-controlled element but not preceded by one. §7.1 says "followed by", yet §5.1 requires approval before any side effect — place the human gate upstream.`,ref);
+      else E('E-IRREV-NOHUMAN',`irreversible action ${where} has no human-controlled element (userTask/manualTask) adjacent in the flow to gate it (§5.1, §7.1).`,ref);
+    }
+  }
+
+  // --- lane enhancements ---
+  for(const lane of model.lanesById.values()){
+    (lane._mis||[]).forEach(m=> E('E-SCOPE-HOST',`<${esc(m)}> is attached to lane "${esc(lane.name||lane.id)}"; a lane may only carry laneEnhancement (§2.2).`,lane.id));
+    if(!lane.enh) continue;
+    if(lane.enh.version!=='1.0') E('E-VERSION',`laneEnhancement on "${esc(lane.name||lane.id)}" has version="${esc(lane.enh.version)}"; must be "1.0".`,lane.id);
+    validateEnvelope(lane.enh.envelope,'scope',`lane "${esc(lane.name||lane.id)}"`,lane.id,E,W);
+  }
+  // --- participant enhancements ---
+  for(const part of model.participantsById.values()){
+    (part._mis||[]).forEach(m=> E('E-SCOPE-HOST',`<${esc(m)}> is attached to participant "${esc(part.name||part.id)}"; a participant may only carry participantEnhancement (§2.3).`,part.id));
+    if(!part.enh) continue;
+    const p=part.enh, where=`participant "${esc(part.name||part.id)}"`;
+    if(p.version!=='1.0') E('E-VERSION',`participantEnhancement on ${where} has version="${esc(p.version)}"; must be "1.0".`,part.id);
+    if(!p.hasDeterminism) E('E-DET-MISSING',`participantEnhancement on ${where} is missing the required determinism attribute (§3.1).`,part.id);
+    if(p.boundary!=='blackBox'&&p.boundary!=='whiteBox') E('E-BOUNDARY',`boundary="${esc(p.boundary)}" on ${where} must be blackBox|whiteBox.`,part.id);
+    if(p.agent && !p.agent.role) E('E-AGENT-ROLE',`agent on ${where} is missing role.`,part.id);
+    validateEnvelope(p.envelope,'scope',where,part.id,E,W);
+    if(p.boundary==='whiteBox'){
+      const proc=model.processesById.get(part.processRef);
+      if(!proc||!proc.nodeIds.length) W('W-WHITEBOX-EMPTY',`${where} is whiteBox but its processRef resolves to no modeled flow (§6.4).`,part.id);
+    }
+  }
+
+  // --- enhancement on sequence flows (explicitly forbidden, §2.1) ---
+  for(const f of model.flowsById.values())
+    if(f.enh) E('E-HOST',`enhancement is attached to sequenceFlow "${esc(f.id)}"; sequence flows are not enhanceable (§2.1).`,f.id);
+
+  // --- references resolve broadly ---
+  for(const f of model.flowsById.values()){
+    if(f.sourceRef && !model.nodesById.has(f.sourceRef)) W('W-FLOW-REF',`sequenceFlow ${esc(f.id)} sourceRef ${esc(f.sourceRef)} not found.`,f.id);
+    if(f.targetRef && !model.nodesById.has(f.targetRef)) W('W-FLOW-REF',`sequenceFlow ${esc(f.id)} targetRef ${esc(f.targetRef)} not found.`,f.id);
+  }
+
+  if(!model.hasAnyBpmnx) W('W-NO-BPMNX','No BPMNx extensions found. This is a plain BPMN 2.0 document — valid, but nothing is AI-operated.',null);
+
+  // summary
+  const errors=out.filter(o=>o.severity==='error').length;
+  if(errors===0) out.unshift({severity:'ok',code:'CONFORMANT',
+    message:'No conformance errors. Checked: scope-marker hosts, typed-event rule, version/determinism, envelope constraints, irreversible-on-scope-envelope, review/escalation refs, §6.3 contradictions, and §7.1 irreversible gating.',ref:null});
+  return out;
+}
+
+function validateEnvelope(env, kind, where, ref, E, W){
+  if(!env) return;
+  if(kind==='scope' && env.hasIrreversibleAttr)
+    E('E-IRREV-SCOPE',`envelope on ${where} carries irreversible; irreversibility is a property of a concrete action and is not permitted on a scope (lane/participant) envelope (§5.2).`,ref);
+  if(env.confRaw!=null){
+    const v=parseFloat(env.confRaw);
+    if(Number.isNaN(v)||v<0||v>1) E('E-CONF-RANGE',`confidenceThreshold="${esc(env.confRaw)}" on ${where} is outside [0,1].`,ref);
+  }
+  if(env.maxStepsRaw!=null){
+    const v=Number(env.maxStepsRaw);
+    if(!Number.isInteger(v)||v<1) E('E-MAXSTEPS',`maxSteps="${esc(env.maxStepsRaw)}" on ${where} must be a positive integer.`,ref);
+  }
+  if(env.timeBudget!=null && Number.isNaN(durationToSeconds(env.timeBudget)))
+    E('E-TIMEBUDGET',`timeBudget="${esc(env.timeBudget)}" on ${where} is not an ISO-8601 duration.`,ref);
+  env.toolAllow.concat(env.toolDeny).forEach(t=>{ if(!t.ref) E('E-TOOL-REF',`a tool element on ${where} is missing the required ref attribute.`,ref); });
+}
+
+/* ===================================================================
+   UI LAYER — layout · SVG renderer · token simulator · inspector ·
+   conformance + log panels · controls wiring
+   =================================================================== */
+
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const STATE = {
+  model:null, diag:null, validation:[], log:[],
+  tokens:[], tokenSeq:0, running:false, timer:null, speed:1,
+  manualBranch:true, pending:null, selectedId:null, selectedEdge:null,
+  view:{k:1, tx:0, ty:0}, contentBox:{x:0,y:0,w:1000,h:600}
+};
+
+/* ---- geometry per node kind ---- */
+function nodeKind(n){
+  if(n.local==='startEvent') return 'start';
+  if(n.local==='endEvent') return 'end';
+  if(/intermediate/i.test(n.local)) return 'intermediate';
+  if(/boundaryEvent/.test(n.local)) return 'intermediate';
+  if(/Gateway$/.test(n.local)) return 'gateway';
+  if(SUBPROC_TYPES.has(n.local)) return 'subprocess';
+  return 'task';
+}
+function defaultSize(kind){
+  if(kind==='gateway') return {w:48,h:48};
+  if(kind==='start'||kind==='end'||kind==='intermediate') return {w:36,h:36};
+  if(kind==='subprocess') return {w:170,h:96};
+  return {w:150,h:78};
+}
+
+/* ===================================================================
+   LAYOUT — DI when sufficient, else layered auto-layout
+   =================================================================== */
+function computeLayout(model){
+  const boxes=new Map();           // nodeId -> {x,y,w,h,kind,di}
+  const lanes=[], pools=[];
+  const nodes=[...model.nodesById.values()];
+
+  const connected = nodes.filter(n=>n.incoming.length||n.outgoing.length);
+  const diOk = connected.length>0 && connected.every(n=>model.diShapes.has(n.id));
+
+  if(diOk){
+    for(const n of nodes){
+      const kind=nodeKind(n);
+      const sh=model.diShapes.get(n.id);
+      if(sh) boxes.set(n.id,{x:sh.x,y:sh.y,w:sh.width,h:sh.height,kind,di:true});
+    }
+    // any stray node lacking a shape -> gutter pack at bottom
+    let gx=40, gy=null;
+    for(const n of nodes){
+      if(boxes.has(n.id)) continue;
+      const kind=nodeKind(n), s=defaultSize(kind);
+      if(gy==null){ let maxY=0; for(const b of boxes.values()) maxY=Math.max(maxY,b.y+b.h); gy=maxY+60; }
+      boxes.set(n.id,{x:gx,y:gy,w:s.w,h:s.h,kind,di:false}); gx+=s.w+40;
+    }
+    // pools + lanes from DI
+    for(const p of model.participantsById.values()){
+      const sh=model.diShapes.get(p.id);
+      if(sh) pools.push({id:p.id,name:p.name,x:sh.x,y:sh.y,w:sh.width,h:sh.height,
+        enhanced:!!p.enh, boundary:p.boundary});
+    }
+    for(const l of model.lanesById.values()){
+      const sh=model.diShapes.get(l.id);
+      if(sh) lanes.push({id:l.id,name:l.name,x:sh.x,y:sh.y,w:sh.width,h:sh.height,enhanced:!!l.enh});
+    }
+  } else {
+    autoLayout(model,nodes,boxes);
+  }
+
+  // gently separate any boxes that overlap (helps crowded tail-ends without
+  // discarding the file's overall layout). Returns the set of ids that moved.
+  const degree=new Map();
+  for(const n of model.nodesById.values())
+    degree.set(n.id,(n.incoming?n.incoming.length:0)+(n.outgoing?n.outgoing.length:0));
+  const movedBoxes = resolveOverlaps(boxes, degree);
+
+  // ---- sequence-flow edges: orthogonal, obstacle-avoiding routing ----
+  const edges=[];
+  const flows=[...model.flowsById.values()].filter(f=>boxes.get(f.sourceRef)&&boxes.get(f.targetRef));
+  // grid bounds (generous padding so detours have room above/below) + inflated obstacles
+  let gminX=Infinity,gminY=Infinity,gmaxX=-Infinity,gmaxY=-Infinity;
+  for(const b of boxes.values()){gminX=Math.min(gminX,b.x);gminY=Math.min(gminY,b.y);gmaxX=Math.max(gmaxX,b.x+b.w);gmaxY=Math.max(gmaxY,b.y+b.h);}
+  const GP=110, OBM=13;
+  const gridBox = isFinite(gminX) ? {x:gminX-GP,y:gminY-GP,w:(gmaxX-gminX)+2*GP,h:(gmaxY-gminY)+2*GP}
+                                  : {x:0,y:0,w:1000,h:600};
+  const obstacles=[...boxes.entries()].map(([id,b])=>({id,x:b.x-OBM,y:b.y-OBM,w:b.w+2*OBM,h:b.h+2*OBM}));
+
+  // pass 1 — choose a side per endpoint, recording direction usage on each side
+  const sideUse=new Map();
+  const useOf=id=>{ if(!sideUse.has(id)) sideUse.set(id,{l:[],r:[],t:[],b:[]}); return sideUse.get(id); };
+  const plan=[];
+  for(const f of flows){
+    const a=boxes.get(f.sourceRef), b=boxes.get(f.targetRef);
+    const di=model.diEdges.get(f.id);
+    const diUsable = di && di.length>=2 && !movedBoxes.has(f.sourceRef) && !movedBoxes.has(f.targetRef);
+    if(diUsable){ plan.push({f,di}); continue; }
+    const [as,bs]=pickSides(a,b);
+    useOf(f.sourceRef)[as].push({id:f.id,dir:'out'});
+    useOf(f.targetRef)[bs].push({id:f.id,dir:'in'});
+    plan.push({f,a,b,as,bs});
+  }
+  // pass 2 — place direction-aware anchors and route around obstacles
+  const meta = f=>({id:f.id, from:f.sourceRef, to:f.targetRef, name:f.name||null,
+    condition:f.condition||null, label:edgeLabelText(model,f), branch:isBranchFlow(model,f)});
+  for(const p of plan){
+    if(p.di){ edges.push(Object.assign(meta(p.f),{pts:p.di})); continue; }
+    const aList=useOf(p.f.sourceRef)[p.as], bList=useOf(p.f.targetRef)[p.bs];
+    const pa=anchorOn(p.a,p.as,aList,p.f.id,'out',nodeKindOf(model,p.f.sourceRef));
+    const pb=anchorOn(p.b,p.bs,bList,p.f.id,'in', nodeKindOf(model,p.f.targetRef));
+    const skip=new Set([p.f.sourceRef,p.f.targetRef]);
+    edges.push(Object.assign(meta(p.f),{pts:routeEdge(pa,p.as,pb,p.bs,obstacles,skip,gridBox)}));
+  }
+  const mfEdges=[];
+  for(const mf of model.messageFlows){
+    const a=boxes.get(mf.sourceRef)||poolBox(pools,mf.sourceRef), b=boxes.get(mf.targetRef)||poolBox(pools,mf.targetRef);
+    if(!a||!b) continue;
+    const di=model.diEdges.get(mf.id);
+    if(di&&di.length>=2){ mfEdges.push({id:mf.id, pts:di}); continue; }
+    const [as,bs]=pickSidesEdge(a,b);
+    const pa=projectAnchor(a,as,b), pb=projectAnchor(b,bs,a);
+    const skip=new Set([mf.sourceRef,mf.targetRef]);
+    mfEdges.push({id:mf.id, pts:routeEdge(pa,as,pb,bs,obstacles,skip,gridBox)});
+  }
+
+  // content bbox
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  const acc=b=>{minX=Math.min(minX,b.x);minY=Math.min(minY,b.y);maxX=Math.max(maxX,b.x+b.w);maxY=Math.max(maxY,b.y+b.h);};
+  boxes.forEach(acc); pools.forEach(acc); lanes.forEach(acc);
+  edges.concat(mfEdges).forEach(e=>e.pts.forEach(p=>{minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x+0);maxY=Math.max(maxY,p.y);}));
+  if(minX>maxX){minX=0;minY=0;maxX=1000;maxY=600;}
+  const pad=48;
+  return {boxes,lanes,pools,edges,mfEdges,
+    box:{x:minX-pad,y:minY-pad,w:(maxX-minX)+pad*2,h:(maxY-minY)+pad*2}};
+}
+function poolBox(pools,id){const p=pools.find(p=>p.id===id);return p?{x:p.x,y:p.y,w:p.w,h:p.h}:null;}
+
+function autoLayout(model,nodes,boxes){
+  const NGAPX=90, NGAPY=44;
+  const succ=new Map(nodes.map(n=>[n.id,[]]));
+  const indeg=new Map(nodes.map(n=>[n.id,0]));
+  for(const f of model.flowsById.values()){
+    if(model.nodesById.has(f.sourceRef)&&model.nodesById.has(f.targetRef)){
+      succ.get(f.sourceRef).push(f.targetRef);
+      indeg.set(f.targetRef,(indeg.get(f.targetRef)||0)+1);
+    }
+  }
+  const rank=new Map();
+  let q=nodes.filter(n=>(indeg.get(n.id)||0)===0).map(n=>n.id);
+  if(!q.length && nodes.length) q=[nodes[0].id];
+  q.forEach(id=>rank.set(id,0));
+  const indeg2=new Map(indeg); const queue=[...q];
+  while(queue.length){
+    const id=queue.shift();
+    for(const t of succ.get(id)||[]){
+      rank.set(t,Math.max(rank.get(t)??0,(rank.get(id)??0)+1));
+      indeg2.set(t,(indeg2.get(t)||0)-1);
+      if((indeg2.get(t)||0)<=0 && !queue.includes(t)) queue.push(t);
+    }
+  }
+  nodes.forEach(n=>{ if(!rank.has(n.id)) rank.set(n.id,0); });
+  const byRank=new Map();
+  nodes.forEach(n=>{ const r=rank.get(n.id); if(!byRank.has(r)) byRank.set(r,[]); byRank.get(r).push(n); });
+  const ranks=[...byRank.keys()].sort((a,b)=>a-b);
+  // measure each column's pixel height so rows never collide regardless of node size
+  const colPix=r=>byRank.get(r).reduce((s,n)=>s+defaultSize(nodeKind(n)).h+NGAPY,-NGAPY);
+  const maxH=Math.max(0,...ranks.map(colPix));
+  // column width tracks the widest node in each rank, so columns never overlap
+  let x=40;
+  for(const r of ranks){
+    const col=byRank.get(r);
+    const colW=Math.max(...col.map(n=>defaultSize(nodeKind(n)).w));
+    let y=40 + (maxH-colPix(r))/2;
+    for(const n of col){
+      const kind=nodeKind(n), s=defaultSize(kind);
+      boxes.set(n.id,{x:x+(colW-s.w)/2, y, w:s.w, h:s.h, kind, di:false});
+      y+=s.h+NGAPY;
+    }
+    x+=colW+NGAPX;
+  }
+}
+
+/* ---- de-overlap: separate overlapping boxes, moving the LESS-connected one.
+   Disconnected (degree-0) nodes get parked clearly out of the row instead of
+   nudged, so an orphan placed on top of a real task can't hide it. ---- */
+function resolveOverlaps(boxes, degree){
+  const deg=id=>(degree&&degree.get(id))||0;
+  const arr=[...boxes.entries()].map(([id,b])=>({id,b,deg:deg(id)}));
+  // orphans (no connections) that overlap something get exiled to a gutter row
+  // BELOW all connected content, where no edge will ever route
+  let gy=-Infinity, gx=Infinity;
+  for(const e of arr){ if(e.deg>0) gy=Math.max(gy,e.b.y+e.b.h); gx=Math.min(gx,e.b.x); }
+  if(!isFinite(gy)) gy=Math.max(0,...arr.map(e=>e.b.y+e.b.h));
+  gy+=70; if(!isFinite(gx)) gx=40;
+  const parked=new Set(), moved=new Set(), M=14;
+  for(let iter=0;iter<12;iter++){
+    let any=false;
+    for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++){
+      const A=arr[i], B=arr[j];
+      const ox=Math.min(A.b.x+A.b.w,B.b.x+B.b.w)-Math.max(A.b.x,B.b.x);
+      const oy=Math.min(A.b.y+A.b.h,B.b.y+B.b.h)-Math.max(A.b.y,B.b.y);
+      if(ox<=0 || oy<=0) continue;                       // not overlapping
+      const mover = (A.deg!==B.deg) ? (A.deg<B.deg?A:B) : B;
+      const keep  = mover===A?B:A;
+      if(mover.deg===0){                                  // orphan → gutter row
+        if(parked.has(mover.id)){ mover.b.x += mover.b.w+40; }
+        else { mover.b.x=gx; mover.b.y=gy; gx+=mover.b.w+40; parked.add(mover.id); }
+      } else if(oy<=ox){                                   // split vertically
+        mover.b.y += (mover.b.y>=keep.b.y ? oy+M : -(oy+M));
+      } else {                                             // split horizontally
+        mover.b.x += (mover.b.x>=keep.b.x ? ox+M : -(ox+M));
+      }
+      moved.add(mover.id); any=true;
+    }
+    if(!any) break;
+  }
+  return moved;
+}
+
+/* ===================================================================
+   ORTHOGONAL EDGE ROUTING
+   pickSides: choose exit/entry sides by the dominant axis between centres
+   anchorOn:  place the anchor on a side, fanning out siblings that share it
+   manhattan: stub out of each side, then connect with right-angle bends
+   =================================================================== */
+function pickSides(a,b){
+  const acx=a.x+a.w/2, acy=a.y+a.h/2, bcx=b.x+b.w/2, bcy=b.y+b.h/2;
+  const dx=bcx-acx, dy=bcy-acy;
+  if(Math.abs(dx)>=Math.abs(dy)) return dx>=0?['r','l']:['l','r'];
+  return dy>=0?['b','t']:['t','b'];
+}
+/* like pickSides but uses which faces are clear of overlap — better when one box
+   is a large container (a pool), so a flow enters the nearest edge instead of
+   doubling back to a far side-centre */
+function pickSidesEdge(a,b){
+  if(a.y+a.h<=b.y) return ['b','t'];
+  if(a.y>=b.y+b.h) return ['t','b'];
+  if(a.x+a.w<=b.x) return ['r','l'];
+  if(a.x>=b.x+b.w) return ['l','r'];
+  return pickSides(a,b);
+}
+/* anchor on `box`'s `side`, aligned to the other box's centre (clamped to the side) */
+function projectAnchor(box,side,other){
+  const ocx=other.x+other.w/2, ocy=other.y+other.h/2;
+  if(side==='r'||side==='l'){
+    const y=Math.max(box.y+10, Math.min(box.y+box.h-10, ocy));
+    return {x: side==='r'?box.x+box.w:box.x, y};
+  }
+  const x=Math.max(box.x+10, Math.min(box.x+box.w-10, ocx));
+  return {x, y: side==='t'?box.y:box.y+box.h};
+}
+function pointOnSide(box,side,off){
+  switch(side){
+    case 'r': return {x:box.x+box.w,       y:box.y+box.h/2+off};
+    case 'l': return {x:box.x,             y:box.y+box.h/2+off};
+    case 't': return {x:box.x+box.w/2+off, y:box.y};
+    default : return {x:box.x+box.w/2+off, y:box.y+box.h};   // 'b'
+  }
+}
+// sideList: array of {id,dir} sharing this side. dir is 'in' or 'out'.
+// Rule: multiple SAME-direction connections may share a point (divergence/convergence),
+// but an entry and an exit must never coincide.
+function anchorOn(box,side,sideList,edgeId,dir,kind){
+  let off=0;
+  if(kind==='gateway'){
+    const hasIn=sideList.some(e=>e.dir==='in'), hasOut=sideList.some(e=>e.dir==='out');
+    if(hasIn && hasOut) off = (dir==='in' ? -9 : 9);   // split the two directions apart
+  } else {
+    const n=sideList.length;
+    if(n>1){
+      const i=Math.max(0,sideList.findIndex(e=>e.id===edgeId));
+      const span=(side==='t'||side==='b')?box.w:box.h;
+      const usable=span*0.6;
+      off=-usable/2 + usable*(i/(n-1));               // fan every connection to a unique point
+    }
+  }
+  return pointOnSide(box,side,off);
+}
+function stub(p,side,S){
+  if(side==='r') return {x:p.x+S, y:p.y};
+  if(side==='l') return {x:p.x-S, y:p.y};
+  if(side==='t') return {x:p.x, y:p.y-S};
+  return {x:p.x, y:p.y+S};                                    // 'b'
+}
+function manhattan(pa,as,pb,bs){
+  const S=18;
+  const a1=stub(pa,as,S), b1=stub(pb,bs,S);
+  const aHoriz=(as==='l'||as==='r'), bHoriz=(bs==='l'||bs==='r');
+  const pts=[pa,a1];
+  if(Math.abs(a1.x-b1.x)<6 || Math.abs(a1.y-b1.y)<6){
+    /* stubs effectively aligned → straight connector */
+  } else if(aHoriz && bHoriz){
+    const mx=(a1.x+b1.x)/2; pts.push({x:mx,y:a1.y},{x:mx,y:b1.y});
+  } else if(!aHoriz && !bHoriz){
+    const my=(a1.y+b1.y)/2; pts.push({x:a1.x,y:my},{x:b1.x,y:my});
+  } else if(aHoriz){            // horizontal out, vertical in → single corner
+    pts.push({x:b1.x,y:a1.y});
+  } else {                      // vertical out, horizontal in
+    pts.push({x:a1.x,y:b1.y});
+  }
+  pts.push(b1,pb);
+  return dedupePts(pts);
+}
+function dedupePts(pts){
+  const out=[];
+  for(const p of pts){ const q=out[out.length-1]; if(!q||Math.abs(q.x-p.x)>0.5||Math.abs(q.y-p.y)>0.5) out.push(p); }
+  return out;
+}
+// thin wrapper kept for message-flow routing (no fan-out, no obstacle avoidance)
+function routeOrth(a,b){
+  const [as,bs]=pickSides(a,b);
+  return manhattan(anchorOn(a,as,[],null,'out','task'),as,anchorOn(b,bs,[],null,'in','task'),bs);
+}
+
+/* ---- tiny binary min-heap for A* ---- */
+class MinHeap{
+  constructor(){this.a=[];}
+  size(){return this.a.length;}
+  push(x){const a=this.a;a.push(x);let i=a.length-1;while(i>0){const p=(i-1)>>1;if(a[p][0]<=a[i][0])break;[a[p],a[i]]=[a[i],a[p]];i=p;}}
+  pop(){const a=this.a;const top=a[0];const last=a.pop();if(a.length){a[0]=last;let i=0;const n=a.length;
+    while(true){let l=2*i+1,r=2*i+2,m=i;if(l<n&&a[l][0]<a[m][0])m=l;if(r<n&&a[r][0]<a[m][0])m=r;if(m===i)break;[a[m],a[i]]=[a[i],a[m]];i=m;}}return top;}
+}
+/* drop redundant collinear points from an orthogonal path */
+function simplify(pts){
+  if(pts.length<3) return pts.slice();
+  const out=[pts[0]];
+  for(let k=1;k<pts.length;k++){
+    const p=pts[k];
+    while(out.length>=2){
+      const a=out[out.length-2], b=out[out.length-1];
+      const col=(Math.abs(a.x-b.x)<0.5&&Math.abs(b.x-p.x)<0.5)||(Math.abs(a.y-b.y)<0.5&&Math.abs(b.y-p.y)<0.5);
+      if(col) out.pop(); else break;
+    }
+    out.push(p);
+  }
+  return out;
+}
+/* route from one stub point to another on a compressed grid, going AROUND obstacles.
+   obstacles are already inflated boxes {id,x,y,w,h}; skip = ids of the edge's own endpoints.
+   returns an array of points (inclusive of both stubs) or null if it can't / shouldn't. */
+function aStarRoute(a1,b1,obstacles,skip,gridBox){
+  const xs=new Set([a1.x,b1.x,gridBox.x,gridBox.x+gridBox.w]);
+  const ys=new Set([a1.y,b1.y,gridBox.y,gridBox.y+gridBox.h]);
+  const inX=v=>v>gridBox.x-1&&v<gridBox.x+gridBox.w+1, inY=v=>v>gridBox.y-1&&v<gridBox.y+gridBox.h+1;
+  for(const r of obstacles){ if(skip.has(r.id)) continue;
+    if(inX(r.x))xs.add(r.x); if(inX(r.x+r.w))xs.add(r.x+r.w);
+    if(inY(r.y))ys.add(r.y); if(inY(r.y+r.h))ys.add(r.y+r.h);
+    // a channel just outside each face gives the router room to slip past
+    if(inX(r.x-7))xs.add(r.x-7); if(inX(r.x+r.w+7))xs.add(r.x+r.w+7);
+    if(inY(r.y-7))ys.add(r.y-7); if(inY(r.y+r.h+7))ys.add(r.y+r.h+7);
+  }
+  const X=[...xs].sort((p,q)=>p-q), Y=[...ys].sort((p,q)=>p-q);
+  const NX=X.length, NY=Y.length;
+  if(NX<2||NY<2||NX*NY>6500) return null;                 // too small/large → fall back
+  const xIdx=new Map(X.map((v,i)=>[v,i])), yIdx=new Map(Y.map((v,i)=>[v,i]));
+  if(!xIdx.has(a1.x)||!yIdx.has(a1.y)||!xIdx.has(b1.x)||!yIdx.has(b1.y)) return null;
+  const si=xIdx.get(a1.x),sj=yIdx.get(a1.y),gi=xIdx.get(b1.x),gj=yIdx.get(b1.y);
+  if(si===gi&&sj===gj) return [{x:a1.x,y:a1.y}];
+  const blocked=(mx,my)=>{ for(const r of obstacles){ if(skip.has(r.id))continue;
+    if(mx>r.x&&mx<r.x+r.w&&my>r.y&&my<r.y+r.h) return true; } return false; };
+  const blockH=(i,j)=>blocked((X[i]+X[i+1])/2,Y[j]);     // segment (i,j)->(i+1,j)
+  const blockV=(i,j)=>blocked(X[i],(Y[j]+Y[j+1])/2);     // segment (i,j)->(i,j+1)
+  const Hh=(i,j)=>Math.abs(X[i]-X[gi])+Math.abs(Y[j]-Y[gj]);
+  const TURN=24;
+  const idOf=(i,j,d)=>(i*NY+j)*2+d;                       // d: 0=horizontal arrival, 1=vertical
+  const g=new Map(), came=new Map(), heap=new MinHeap();
+  for(const d of [0,1]){ g.set(idOf(si,sj,d),0); heap.push([Hh(si,sj),si,sj,d]); }
+  let goal=null;
+  while(heap.size()){
+    const [f,i,j,d]=heap.pop(); const cur=idOf(i,j,d); const gc=g.get(cur);
+    if(gc==null || f-Hh(i,j) > gc+0.001) continue;
+    if(i===gi&&j===gj){ goal=cur; break; }
+    const relax=(ni,nj,nd,bad,dist)=>{
+      if(bad) return;
+      const cost=gc+dist+(nd!==d?TURN:0), ns=idOf(ni,nj,nd);
+      const old=g.has(ns)?g.get(ns):Infinity;
+      if(cost<old){ g.set(ns,cost); came.set(ns,cur); heap.push([cost+Hh(ni,nj),ni,nj,nd]); }
+    };
+    if(i+1<NX) relax(i+1,j,0,blockH(i,j),X[i+1]-X[i]);
+    if(i-1>=0) relax(i-1,j,0,blockH(i-1,j),X[i]-X[i-1]);
+    if(j+1<NY) relax(i,j+1,1,blockV(i,j),Y[j+1]-Y[j]);
+    if(j-1>=0) relax(i,j-1,1,blockV(i,j-1),Y[j]-Y[j-1]);
+  }
+  if(goal==null) return null;
+  const path=[]; let s=goal;
+  while(s!=null){ const d=s%2, cell=(s-d)/2, j=cell%NY, i=(cell-j)/NY; path.push({x:X[i],y:Y[j]}); s=came.has(s)?came.get(s):null; }
+  return path.reverse();
+}
+/* full edge route: perpendicular stubs + obstacle-avoiding middle, with a safe fallback */
+function routeEdge(pa,as,pb,bs,obstacles,skip,gridBox){
+  const S=18, a1=stub(pa,as,S), b1=stub(pb,bs,S);
+  // start/goal tolerance: when nodes are packed tight, a stub can land INSIDE a
+  // neighbour's inflated box, which would trap A* and force the straight-line
+  // fallback (cutting through everything). Ignore any obstacle a stub sits in.
+  const skip2=new Set(skip);
+  for(const r of obstacles){
+    if(skip2.has(r.id)) continue;
+    const inA=a1.x>r.x&&a1.x<r.x+r.w&&a1.y>r.y&&a1.y<r.y+r.h;
+    const inB=b1.x>r.x&&b1.x<r.x+r.w&&b1.y>r.y&&b1.y<r.y+r.h;
+    if(inA||inB) skip2.add(r.id);
+  }
+  let mid=null;
+  try{ mid=aStarRoute(a1,b1,obstacles,skip2,gridBox); }catch(_){ mid=null; }
+  if(mid && mid.length){ return simplify(dedupePts([pa,...mid,pb])); }
+  return manhattan(pa,as,pb,bs);                          // fallback: never worse than before
+}
+function nodeKindOf(model,id){const n=model.nodesById.get(id);return n?nodeKind(n):'task';}
+function isBranchFlow(model,f){
+  const s=model.nodesById.get(f.sourceRef);
+  return !!s && /Gateway$/.test(s.local) && s.outgoing.length>1;
+}
+function edgeLabelText(model,f){
+  if(f.name) return f.name;
+  const s=model.nodesById.get(f.sourceRef);
+  if(s && s.default===f.id) return 'else';
+  if(f.condition){ const c=String(f.condition).replace(/\s+/g,' ').trim();
+    return c?(c.length>26?c.slice(0,25)+'…':c):null; }
+  return null;
+}
+function center(b){return {x:b.x+b.w/2, y:b.y+b.h/2};}
+
+/* ===================================================================
+   SVG RENDERER
+   =================================================================== */
+const NS='http://www.w3.org/2000/svg';
+function svgNode(tag,attrs){const e=document.createElementNS(NS,tag); if(attrs)for(const k in attrs)e.setAttribute(k,attrs[k]); return e;}
+
+function renderDiagram(){
+  const svg=$('#canvas'); svg.textContent='';
+  const m=STATE.model, d=STATE.diag; if(!m||!d) return;
+  const b=STATE.contentBox=d.box;
+  svg.setAttribute('viewBox',`${b.x} ${b.y} ${b.w} ${b.h}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+
+  // defs
+  const defs=svgNode('defs');
+  defs.innerHTML =
+    `<filter id="glowAmber" x="-40%" y="-40%" width="180%" height="180%">
+       <feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+     <filter id="glowTok" x="-80%" y="-80%" width="260%" height="260%">
+       <feGaussianBlur stdDeviation="3.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+       <path d="M0,0 L10,5 L0,10 z" fill="#5B6678"/></marker>
+     <marker id="arrowMsg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+       <path d="M0,0 L10,5 L0,10 z" fill="#7C8AA8"/></marker>
+     <marker id="arrowSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+       <path d="M0,0 L10,5 L0,10 z" fill="#FFD36E"/></marker>`;
+  svg.appendChild(defs);
+
+  const root=svgNode('g',{id:'viewRoot'});
+  svg.appendChild(root);
+  applyView();
+
+  // pools (behind)
+  for(const p of d.pools){
+    const g=svgNode('g');
+    g.appendChild(svgNode('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:4,
+      fill: p.enhanced?'rgba(124,138,168,.05)':'rgba(255,255,255,.012)',
+      stroke:'#2A3140','stroke-width':1.2}));
+    const lab=svgNode('text',{x:p.x+15,y:p.y+p.h/2,fill:'#8893A6','font-size':12,
+      'font-family':'ui-sans-serif,system-ui',transform:`rotate(-90 ${p.x+15} ${p.y+p.h/2})`,'text-anchor':'middle'});
+    lab.textContent=(p.name||'pool')+(p.boundary?`  ·  ${p.boundary}`:'');
+    g.appendChild(lab);
+    root.appendChild(g);
+  }
+  // lanes
+  for(const l of d.lanes){
+    const g=svgNode('g');
+    g.appendChild(svgNode('rect',{x:l.x,y:l.y,width:l.w,height:l.h,
+      fill:l.enhanced?'rgba(67,199,166,.045)':'transparent',
+      stroke:'#232A38','stroke-width':1}));
+    const lab=svgNode('text',{x:l.x+13,y:l.y+l.h/2,
+      'font-size':11,'font-family':'ui-monospace,monospace',
+      transform:`rotate(-90 ${l.x+13} ${l.y+l.h/2})`,'text-anchor':'middle'});
+    lab.setAttribute('fill', l.enhanced?'#5FCBB0':'#7A8498');
+    lab.textContent=(l.name||'lane')+(l.enhanced?'  ◆ enhanced':'');
+    g.appendChild(lab);
+    root.appendChild(g);
+  }
+  // edges — each in its own selectable group (hit area + visible line + midpoint chevron)
+  const eLayer=svgNode('g',{id:'edgeLayer'}); root.appendChild(eLayer);
+  const buildEdge=(e,isMsg,highlight)=>{
+    const sel = highlight || e.id===STATE.selectedEdge;
+    const g=svgNode('g',{class:'edge','data-edge':e.id, style:'cursor:pointer'});
+    const ptsStr=e.pts.map(p=>`${p.x},${p.y}`).join(' ');
+    g.appendChild(svgNode('polyline',{points:ptsStr,fill:'none',stroke:'transparent','stroke-width':14}));
+    const stroke = sel?'#FFD36E':(isMsg?'#5A6378':'#3A4456');
+    const vis=svgNode('polyline',{points:ptsStr,fill:'none',stroke,
+      'stroke-width': sel?2.6:(isMsg?1.4:1.6),'stroke-linejoin':'round','stroke-linecap':'round',
+      'marker-end': sel?'url(#arrowSel)':(isMsg?'url(#arrowMsg)':'url(#arrow)')});
+    if(isMsg) vis.setAttribute('stroke-dasharray','5 4');
+    g.appendChild(vis);
+    const chev=midChevron(e.pts, sel?'#FFD36E':(isMsg?'#7C8AA8':'#7E8AA0'));
+    if(chev) g.appendChild(chev);
+    g.addEventListener('click',ev=>{ev.stopPropagation(); selectEdge(e.id);});
+    return g;
+  };
+  for(const e of d.edges){ if(e.id!==STATE.selectedEdge) eLayer.appendChild(buildEdge(e,false,false)); }
+  for(const e of d.mfEdges){ if(e.id!==STATE.selectedEdge) eLayer.appendChild(buildEdge(e,true,false)); }
+  // nodes
+  const nLayer=svgNode('g',{id:'nodeLayer'}); root.appendChild(nLayer);
+  for(const [id,box] of d.boxes){
+    const n=m.nodesById.get(id); if(!n) continue;
+    nLayer.appendChild(renderNode(n,box));
+  }
+  // selected edge drawn ON TOP of nodes so it is fully visible when outlined
+  if(STATE.selectedEdge){
+    const se=d.edges.find(e=>e.id===STATE.selectedEdge), sm=d.mfEdges.find(e=>e.id===STATE.selectedEdge);
+    const overlay=svgNode('g',{id:'edgeOverlay'}); root.appendChild(overlay);
+    if(se) overlay.appendChild(buildEdge(se,false,true));
+    else if(sm) overlay.appendChild(buildEdge(sm,true,true));
+  }
+  // edge labels last → always legible, placed on a clear stretch (never over a node)
+  const labLayer=svgNode('g',{id:'labelLayer'}); root.appendChild(labLayer);
+  for(const e of d.edges){
+    if(!e.label) continue;
+    const pos=clearLabelPoint(e.pts, d.boxes, e.branch?0.28:0.5);
+    drawEdgeLabel(labLayer, e.label, pos.x, pos.y, e.branch, e.id===STATE.selectedEdge);
+  }
+  // token layer on top
+  root.appendChild(svgNode('g',{id:'tokenLayer'}));
+  renderTokens();
+  highlightSelection();
+}
+
+function renderNode(n,box){
+  const g=svgNode('g',{class:'node','data-id':n.id,style:'cursor:pointer'});
+  const sel = n.id===STATE.selectedId;
+  let pol=null; if(n.enh){ try{pol=effectivePolicy(STATE.model,n);}catch(e){} }
+  const c=center(box);
+
+  if(box.kind==='gateway'){
+    const r=box.w/2;
+    g.appendChild(svgNode('path',{d:`M${c.x},${box.y} L${box.x+box.w},${c.y} L${c.x},${box.y+box.h} L${box.x},${c.y} Z`,
+      fill:'#1A2030',stroke: n.enh?'#43C7A6':'#3C4658','stroke-width':n.enh?2:1.4}));
+    const sym=svgNode('text',{x:c.x,y:c.y+5,'text-anchor':'middle',fill:'#8893A6','font-size':16});
+    sym.textContent = n.local==='exclusiveGateway'?'×': n.local==='parallelGateway'?'+': n.local==='inclusiveGateway'?'○':'◇';
+    g.appendChild(sym);
+  } else if(box.kind==='start'||box.kind==='end'||box.kind==='intermediate'){
+    const r=box.w/2;
+    g.appendChild(svgNode('circle',{cx:c.x,cy:c.y,r,
+      fill:'#161B26',stroke: n.enh?'#43C7A6':(box.kind==='end'?'#6A5050':'#3C4658'),
+      'stroke-width': box.kind==='end'?2.4:(n.enh?2:1.5)}));
+    if(box.kind==='intermediate') g.appendChild(svgNode('circle',{cx:c.x,cy:c.y,r:r-3.5,fill:'none',stroke:'#3C4658','stroke-width':1}));
+    if(n.eventDefs && n.eventDefs.length){
+      const sym=svgNode('text',{x:c.x,y:c.y+4,'text-anchor':'middle',fill:'#8893A6','font-size':12});
+      sym.textContent = /message/i.test(n.eventDefs[0])?'✉': /timer/i.test(n.eventDefs[0])?'⏱':/signal/i.test(n.eventDefs[0])?'▲':/error/i.test(n.eventDefs[0])?'⚡':'◆';
+      g.appendChild(sym);
+    }
+  } else {
+    g.appendChild(svgNode('rect',{x:box.x,y:box.y,width:box.w,height:box.h,rx:10,
+      fill:'#1A2030', stroke: n.enh?'#43C7A6':'#3C4658','stroke-width':n.enh?2:1.4}));
+    if(box.kind==='subprocess')
+      g.appendChild(svgNode('rect',{x:box.x+3,y:box.y+3,width:box.w-6,height:box.h-6,rx:8,fill:'none',stroke:'#2A3344','stroke-width':1}));
+    // type glyph
+    const gly=svgNode('text',{x:box.x+12,y:box.y+19,fill:'#5B6678','font-size':12});
+    gly.textContent = {serviceTask:'⚙',userTask:'☺',manualTask:'✋',businessRuleTask:'▤',scriptTask:'</>',sendTask:'✈',receiveTask:'⇣'}[n.local]||'';
+    g.appendChild(gly);
+  }
+
+  // label — full name, wrapped onto as many lines as needed (no truncation)
+  if(box.kind!=='gateway'){
+    const isEvent = box.kind==='start'||box.kind==='end'||box.kind==='intermediate';
+    const tx = isEvent? c.x : box.x+box.w/2;
+    const lineH = 13;
+    if(isEvent){
+      // event labels sit below the node
+      const lines=wrapText(n.name||n.local, 18);
+      multilineLabel(g, lines, tx, box.y+box.h+13, lineH,
+        {fill:'#C8CFDC','font-size':11.5,'font-family':'ui-sans-serif,system-ui'});
+    } else {
+      // task / subprocess labels sit inside the box, vertically centred
+      const maxChars=Math.max(8, Math.floor((box.w-18)/6.4));
+      const lines=wrapText(n.name||n.local, maxChars);
+      const topY = c.y + 4 - (lines.length-1)*lineH/2;
+      multilineLabel(g, lines, tx, topY, lineH,
+        {fill:'#C8CFDC','font-size':11.5,'font-family':'ui-sans-serif,system-ui'});
+    }
+  } else if(n.name){
+    const lines=wrapText(n.name, 18);
+    multilineLabel(g, lines, c.x, box.y+box.h+13, 12,
+      {fill:'#9AA3B5','font-size':10.5,'font-family':'ui-sans-serif,system-ui'});
+  }
+
+  // ---- governance decorations ----
+  if(n.enh){
+    const det = n.enh.determinism==='nondeterministic';
+    // enhancement chip top-left: nondeterministic → "AI", deterministic → "Program"
+    const chipLabel = det ? 'AI' : 'Program';
+    const chipW = det ? 26 : 52;
+    const chip=svgNode('g');
+    chip.appendChild(svgNode('rect',{x:box.x-6,y:box.y-11,width:chipW,height:15,rx:7,
+      fill: det?'#231C33':'#13261F', stroke: det?'#B197FC':'#43C7A6','stroke-width':1}));
+    const ct=svgNode('text',{x:box.x-6+chipW/2,y:box.y+0,'text-anchor':'middle',fill:det?'#C4B0FF':'#5FD3B6','font-size':8.5,'font-family':'ui-monospace,monospace','font-weight':600});
+    ct.textContent=chipLabel; chip.appendChild(ct);
+    g.appendChild(chip);
+
+    let badgeX=box.x+box.w-6;
+    const badge=(fill,stroke,glyph,glow)=>{
+      const bg=svgNode('g'); if(glow) bg.setAttribute('filter','url(#glowAmber)');
+      bg.appendChild(svgNode('circle',{cx:badgeX,cy:box.y-3,r:8,fill,stroke,'stroke-width':1.2}));
+      const t=svgNode('text',{x:badgeX,y:box.y+0.5,'text-anchor':'middle',fill:stroke,'font-size':9,'font-weight':700});
+      t.textContent=glyph; bg.appendChild(t); g.appendChild(bg); badgeX-=20;
+    };
+    if(pol && pol.irreversible.val) badge('#2A2008','#F5A524','⛔',true);
+    if(n.enh.escalations && n.enh.escalations.length) badge('#221A33','#B197FC','⤴',false);
+    if(pol && pol.audited.val) g.appendChild(svgNode('circle',{cx:box.x+box.w-3,cy:box.y+box.h-3,r:4,fill:'#5BA8FF',stroke:'#0F1218','stroke-width':1}));
+  }
+  if(sel){
+    g.appendChild(svgNode('rect',{x:box.x-7,y:box.y-7,width:box.w+14,height:box.h+14,rx:13,
+      fill:'none',stroke:'#FFD36E','stroke-width':1.4,'stroke-dasharray':'4 3',class:'selring'}));
+  }
+  g.addEventListener('click',ev=>{ev.stopPropagation(); select(n.id);});
+  return g;
+}
+function trim(s,n){s=s||'';return s.length>n?s.slice(0,n-1)+'…':s;}
+
+/* greedy word-wrap into lines of at most maxChars; hard-breaks words longer than a line */
+function wrapText(str,maxChars){
+  const words=String(str||'').split(/\s+/).filter(Boolean);
+  const lines=[]; let cur='';
+  for(let w of words){
+    while(w.length>maxChars){            // break very long single words
+      if(cur){ lines.push(cur); cur=''; }
+      lines.push(w.slice(0,maxChars));
+      w=w.slice(maxChars);
+    }
+    if(!cur) cur=w;
+    else if((cur+' '+w).length<=maxChars) cur+=' '+w;
+    else { lines.push(cur); cur=w; }
+  }
+  if(cur) lines.push(cur);
+  return lines.length?lines:[''];
+}
+/* render an array of lines as a centred multi-line <text>; topY is the baseline of the first line */
+function multilineLabel(parent,lines,x,topY,lineH,attrs){
+  const t=svgNode('text',Object.assign({x,y:topY,'text-anchor':'middle'},attrs||{}));
+  lines.forEach((ln,i)=>{
+    const ts=svgNode('tspan',{x, dy:(i===0?0:lineH)});
+    ts.textContent=ln;
+    t.appendChild(ts);
+  });
+  parent.appendChild(t);
+  return t;
+}
+
+/* pick a point along the edge that doesn't sit on top of any node box,
+   as close as possible to the preferred fraction (keeps labels readable
+   without covering elements) */
+function clearLabelPoint(pts, boxes, preferFrac){
+  const inside=p=>{ for(const b of boxes.values()){
+    if(p.x>b.x-3&&p.x<b.x+b.w+3&&p.y>b.y-3&&p.y<b.y+b.h+3) return true; } return false; };
+  let best=null, bestScore=Infinity;
+  for(let f=0.08; f<=0.92; f+=0.035){
+    const p=pointAtFrac(pts,f);
+    if(inside(p)) continue;
+    const score=Math.abs(f-preferFrac);
+    if(score<bestScore){ bestScore=score; best=p; }
+  }
+  return best || pointAtFrac(pts, preferFrac);
+}
+
+/* point a fraction of the way along a polyline (by arc length) */
+function pointAtFrac(pts,frac){
+  if(!pts||pts.length<2) return pts&&pts[0]||{x:0,y:0};
+  const seg=[]; let total=0;
+  for(let i=1;i<pts.length;i++){const L=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);seg.push(L);total+=L;}
+  if(total===0) return pts[0];
+  let d=total*Math.max(0,Math.min(1,frac));
+  for(let i=1;i<pts.length;i++){
+    if(d<=seg[i-1]){const t=seg[i-1]?d/seg[i-1]:0;
+      return {x:pts[i-1].x+(pts[i].x-pts[i-1].x)*t, y:pts[i-1].y+(pts[i].y-pts[i-1].y)*t};}
+    d-=seg[i-1];
+  }
+  return pts[pts.length-1];
+}
+/* colour cue for yes/no-style branch labels */
+function labelTone(text){
+  const t=String(text).toLowerCase();
+  if(/^(yes|y|true|approve|approved|pass|passed|accept|accepted|ok|allow|allowed|success)/.test(t)) return 'pos';
+  if(/^(no|n|false|deny|denied|reject|rejected|refer|fail|failed|decline|declined|else)/.test(t)) return 'neg';
+  return 'neutral';
+}
+/* a small rounded label chip with a readable background, centred on (x,y) */
+function drawEdgeLabel(layer,text,x,y,branch,selected){
+  const tone=branch?labelTone(text):'neutral';
+  const palette={
+    pos:    {bg:'rgba(20,30,26,.95)', stroke:'rgba(67,199,166,.55)', ink:'#6FD9BD'},
+    neg:    {bg:'rgba(32,22,24,.95)', stroke:'rgba(255,107,107,.5)', ink:'#FF8F8F'},
+    neutral:{bg:'rgba(20,24,32,.95)', stroke: branch?'#4A5468':'#343E51', ink: branch?'#D7DEEA':'#9AA3B5'}
+  }[tone];
+  const stroke = selected?'#FFD36E':palette.stroke;
+  const fs=10.5, padX=7, h=17, w=Math.max(18, text.length*6.0 + padX*2);
+  const g=svgNode('g');
+  g.appendChild(svgNode('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:6,
+    fill:palette.bg, stroke, 'stroke-width':selected?1.6:1}));
+  const t=svgNode('text',{x,y:y+3.7,'text-anchor':'middle',fill:selected?'#FFE08A':palette.ink,
+    'font-size':fs,'font-family':'ui-monospace,monospace','font-weight':branch||selected?600:400});
+  t.textContent=text;
+  g.appendChild(t);
+  layer.appendChild(g);
+  return g;
+}
+/* a small chevron at the edge midpoint showing travel direction (diagonal across a corner) */
+function midChevron(pts,color){
+  if(!pts||pts.length<2) return null;
+  let total=0; for(let i=1;i<pts.length;i++) total+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+  if(total<46) return null;                    // too short to bother
+  const d=Math.min(0.18, 9/total);
+  const mid=pointAtFrac(pts,0.5), a=pointAtFrac(pts,0.5-d), b=pointAtFrac(pts,0.5+d);
+  const ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+  const g=svgNode('g',{transform:`translate(${mid.x} ${mid.y}) rotate(${ang})`});
+  g.appendChild(svgNode('path',{d:'M -4.2 -4.2 L 4.2 0 L -4.2 4.2 Z', fill:color}));
+  return g;
+}
+
+/* ---- pan / zoom ---- */
+function applyView(){
+  const r=$('#viewRoot'); if(!r) return;
+  const v=STATE.view;
+  r.setAttribute('transform',`translate(${v.tx} ${v.ty}) scale(${v.k})`);
+}
+function highlightSelection(){ /* handled in renderNode via STATE.selectedId */ }
+
+/* ===================================================================
+   TOKEN SIMULATOR
+   =================================================================== */
+function startNodes(m){
+  const starts=[...m.nodesById.values()].filter(n=>n.local==='startEvent');
+  if(starts.length) return starts;
+  return [...m.nodesById.values()].filter(n=>n.incoming.length===0);
+}
+function resetSim(silent){
+  STATE.tokens=[]; STATE.tokenSeq=0; STATE.pending=null; pauseRun();
+  for(const s of startNodes(STATE.model)) STATE.tokens.push({id:++STATE.tokenSeq, at:s.id});
+  if(!silent){ STATE.log=[]; logMsg('sys','sys','simulation reset — '+STATE.tokens.length+' token(s) at start'); }
+  renderTokens(); renderLog();
+}
+function nodeById(id){return STATE.model.nodesById.get(id);}
+function outFlows(n){return n.outgoing.map(fid=>STATE.model.flowsById.get(fid)).filter(Boolean);}
+
+function step(){
+  const m=STATE.model; if(!m) return;
+  if(STATE.pending){ return; }            // waiting on a manual branch
+  if(!STATE.tokens.length){ logMsg('done','✓','no live tokens — process complete'); pauseRun(); return; }
+
+  const next=[]; let movedEnhanced=null;
+  // parallel-join bookkeeping
+  const arriving=new Map();
+
+  for(const tok of STATE.tokens){
+    const n=nodeById(tok.at); if(!n){ continue; }
+    const outs=outFlows(n);
+
+    // terminal
+    if(outs.length===0){ logMsg('done','✓',`token ${tok.id} completed at ${label(n)}`); continue; }
+
+    // gateway branching
+    const isExclusive = n.local==='exclusiveGateway'||n.local==='inclusiveGateway';
+    const isParallel  = n.local==='parallelGateway';
+
+    if(isExclusive && outs.length>1){
+      if(STATE.manualBranch){
+        STATE.pending={tok, node:n, outs};
+        next.push(tok);                    // hold the token here
+        showBranchPicker(n,outs);
+        // keep remaining tokens in place this step
+        for(const other of STATE.tokens){ if(other!==tok && !next.includes(other)) next.push(other); }
+        STATE.tokens=next; renderTokens();
+        logMsg('sys','⑂',`branch decision required at ${label(n)}`);
+        return;
+      } else {
+        moveAlong(next,tok,outs[0],m); 
+        movedEnhanced = enhEnter(outs[0].targetRef)||movedEnhanced;
+      }
+    } else if(isParallel && outs.length>1){
+      for(const f of outs){ next.push({id:++STATE.tokenSeq, at:f.targetRef}); movedEnhanced=enhEnter(f.targetRef)||movedEnhanced; }
+      logMsg('enter','⑂',`parallel fork at ${label(n)} → ${outs.length} tokens`);
+    } else {
+      const f=outs[0];
+      // simple parallel join: collect, emit once below
+      const tgt=nodeById(f.targetRef);
+      if(tgt && tgt.local==='parallelGateway' && tgt.incoming.length>1){
+        arriving.set(tgt.id,(arriving.get(tgt.id)||0)+1);
+        next.push({id:tok.id, at:tgt.id, _join:true});
+      } else {
+        moveAlong(next,tok,f,m);
+        movedEnhanced = enhEnter(f.targetRef)||movedEnhanced;
+      }
+    }
+  }
+
+  // collapse parallel joins that are satisfied
+  const collapsed=[]; const seenJoin=new Set();
+  for(const t of next){
+    if(t._join){
+      const jn=nodeById(t.at);
+      if(seenJoin.has(t.at)) continue;
+      const need=jn.incoming.length, have=arriving.get(t.at)||0;
+      if(have>=need){ seenJoin.add(t.at);
+        const o=outFlows(jn);
+        if(o.length){ collapsed.push({id:++STATE.tokenSeq,at:o[0].targetRef}); logMsg('enter','⑃',`parallel join at ${label(jn)}`); movedEnhanced=enhEnter(o[0].targetRef)||movedEnhanced; }
+      } else { seenJoin.add(t.at); collapsed.push({id:t.id,at:t.at}); }
+    } else collapsed.push(t);
+  }
+  STATE.tokens=collapsed;
+  renderTokens(); renderLog();
+  if(movedEnhanced) select(movedEnhanced, true);
+  if(!STATE.tokens.length){ logMsg('done','✓','process complete'); pauseRun(); }
+}
+
+function moveAlong(next,tok,flow,m){ next.push({id:tok.id, at:flow.targetRef}); }
+function label(n){return n.name||n.id;}
+
+// returns nodeId if the entered node is enhanced (for auto-select + flag logging)
+function enhEnter(nodeId){
+  const n=nodeById(nodeId); if(!n) return null;
+  logMsg('enter','→',`token enters ${label(n)}`);
+  if(!n.enh) return null;
+  let pol; try{pol=effectivePolicy(STATE.model,n);}catch(e){pol=null;}
+  const isAI=n.enh.determinism==='nondeterministic';
+  const det=isAI?' · nondeterministic':'';
+  logMsg('enter','◆',`  ${isAI?'AI-operated':'Program-operated'}${det}`);
+  if(n.enh.escalations && n.enh.escalations.length){
+    n.enh.escalations.forEach(s=> logMsg('escal','⤴',`  escalation: when "${s.when}"${s.targetRef?` → ${trim(name(s.targetRef),20)}`:''}${s.sla?` (sla ${s.sla})`:''}`));
+  }
+  if(pol && pol.confidenceThreshold.val!=null)
+    logMsg('enter','◇',`  confidence floor ${pol.confidenceThreshold.val} — below it the agent escalates`);
+  if(pol && pol.irreversible.val)
+    logMsg('irrev','⛔',`  IRREVERSIBLE — runtime must gate behind human approval before side effect`);
+  if(pol && pol.toolDeny.length)
+    logMsg('enter','⊘',`  denied: ${pol.toolDeny.map(t=>t.ref).join(', ')}`);
+  return n.id;
+}
+function name(id){const n=STATE.model.nodesById.get(id);return n?label(n):id;}
+
+/* ---- token rendering (animated transform) ---- */
+function renderTokens(){
+  const layer=$('#tokenLayer'); if(!layer) return;
+  const existing=new Map([...layer.children].map(c=>[c.getAttribute('data-tok'),c]));
+  const live=new Set();
+  for(const tok of STATE.tokens){
+    const box=STATE.diag.boxes.get(tok.at); if(!box) continue;
+    const c=center(box); live.add(String(tok.id));
+    let g=existing.get(String(tok.id));
+    if(!g){
+      g=svgNode('g',{'data-tok':tok.id});
+      g.style.transition = REDUCED?'none':'transform .45s cubic-bezier(.5,.05,.3,1)';
+      g.appendChild(svgNode('circle',{r:9,fill:'#FFD36E',stroke:'#0F1218','stroke-width':1.5,filter:'url(#glowTok)'}));
+      layer.appendChild(g);
+    }
+    g.setAttribute('transform',`translate(${c.x} ${c.y})`);
+  }
+  for(const [id,g] of existing) if(!live.has(id)) g.remove();
+}
+
+/* ---- manual branch picker (HTML overlay) ---- */
+function showBranchPicker(node,outs){
+  clearBranchPicker();
+  const wrap=$('#canvasWrap');
+  const div=el('div'); div.id='branchPicker';
+  div.style.cssText='position:absolute;left:50%;top:16px;transform:translateX(-50%);z-index:25;'+
+    'background:rgba(22,26,34,.96);border:1px solid var(--escal);border-radius:12px;padding:11px 13px;'+
+    'box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:520px';
+  const h=el('div'); h.style.cssText='font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--escal);margin-bottom:8px';
+  h.textContent=`branch · ${node.enh?(node.enh.determinism==='nondeterministic'?'AI gateway · ':'Program gateway · '):''}${label(node)}`;
+  div.appendChild(h);
+  const row=el('div'); row.style.cssText='display:flex;gap:7px;flex-wrap:wrap';
+  outs.forEach(f=>{
+    const tgt=STATE.model.nodesById.get(f.targetRef);
+    const btn=el('button');
+    btn.style.cssText='background:var(--raised2);border:1px solid var(--line2);color:var(--ink);'+
+      'padding:7px 11px;border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font-ui)';
+    btn.textContent=(f.name?`${f.name} → `:'→ ')+ (tgt?label(tgt):f.targetRef);
+    btn.onmouseenter=()=>btn.style.borderColor='var(--escal)';
+    btn.onmouseleave=()=>btn.style.borderColor='var(--line2)';
+    btn.onclick=()=>chooseBranch(f);
+    row.appendChild(btn);
+  });
+  div.appendChild(row);
+  wrap.appendChild(div);
+}
+function clearBranchPicker(){const p=$('#branchPicker'); if(p)p.remove();}
+function chooseBranch(flow){
+  const p=STATE.pending; if(!p) return;
+  STATE.pending=null; clearBranchPicker();
+  STATE.tokens=STATE.tokens.filter(t=>t!==p.tok);
+  STATE.tokens.push({id:p.tok.id, at:flow.targetRef});
+  logMsg('enter','✓',`branch chosen at ${label(p.node)} → ${trim(name(flow.targetRef),22)}`);
+  const en=enhEnter(flow.targetRef);
+  renderTokens(); renderLog();
+  if(en) select(en,true);
+  if(STATE.running) resumeRun();
+}
+
+/* ---- run loop ---- */
+function speedMs(){return {1:900,2:520,3:260}[STATE.speed]||900;}
+function toggleRun(){ STATE.running?pauseRun():startRun(); }
+function startRun(){
+  if(!STATE.tokens.length) resetSim(true);
+  STATE.running=true; $('#runBtn').textContent='❚❚ Pause'; $('#runBtn').classList.add('primary');
+  resumeRun();
+}
+function resumeRun(){ clearInterval(STATE.timer); STATE.timer=setInterval(()=>{ if(STATE.pending){return;} step(); if(!STATE.tokens.length)pauseRun(); }, speedMs()); }
+function pauseRun(){ STATE.running=false; clearInterval(STATE.timer); STATE.timer=null; const b=$('#runBtn'); if(b){b.textContent='▶ Run';} }
+
+/* ===================================================================
+   INSPECTOR
+   =================================================================== */
+function select(id, keep){
+  STATE.selectedId=id;
+  STATE.selectedEdge=null;       // selecting a node clears any selected arrow
+  renderDiagram();               // re-render to move selection ring
+  renderInspector();
+}
+function selectEdge(id){
+  STATE.selectedEdge=id;
+  STATE.selectedId=null;
+  renderDiagram();
+  renderInspector();
+}
+function clearSelection(){ STATE.selectedId=null; STATE.selectedEdge=null; renderDiagram(); renderInspector(); }
+
+function renderInspector(){
+  const ins=$('#inspector'), empty=$('#inspEmpty');
+  // remove previous body
+  const old=$('#inspBody'); if(old) old.remove();
+  if(STATE.selectedEdge){ empty.style.display='none'; renderEdgeInspector(); return; }
+  const n = STATE.selectedId? STATE.model.nodesById.get(STATE.selectedId):null;
+  if(!n){ empty.style.display=''; return; }
+  empty.style.display='none';
+
+  const body=el('div'); body.id='inspBody';
+  const head=el('div','insp-head');
+  const eb=el('div','eyebrow'); eb.textContent = n.enh?(n.enh.determinism==='nondeterministic'?'AI-operated element':'Program-operated element'):'BPMN element';
+  head.appendChild(eb);
+  const title=el('div','insp-title'); title.textContent=label(n); head.appendChild(title);
+  const sub=el('div','insp-sub'); sub.textContent=`${n.local}  ·  ${n.id}`; head.appendChild(sub);
+  // chips
+  if(n.enh){
+    const chips=el('div'); chips.style.marginTop='8px';
+    const det=el('span', 'chip '+(n.enh.determinism==='nondeterministic'?'nondet':'det'));
+    det.textContent=n.enh.determinism||'determinism?'; chips.appendChild(det);
+    let pol; try{pol=effectivePolicy(STATE.model,n);}catch(e){pol=null;}
+    if(pol&&pol.irreversible.val){const c=el('span','chip irrev');c.textContent='irreversible';chips.appendChild(c);}
+    if(pol&&pol.audited.val){const c=el('span','chip audit');c.textContent='audited';chips.appendChild(c);}
+    head.appendChild(chips);
+  }
+  body.appendChild(head);
+
+  const main=el('div','insp-body');
+  if(n.enh){
+    renderResolver(main,n);
+    renderAgent(main,n);
+    renderReviews(main,n);
+    renderEscalations(main,n);
+    renderProps(main,n);
+  } else {
+    const p=el('div','note'); p.style.borderLeftColor='var(--line2)';
+    const lane=n.laneId?STATE.model.lanesById.get(n.laneId):null;
+    const part=n.participantId?STATE.model.participantsById.get(n.participantId):null;
+    p.innerHTML=`Not AI-operated. Plain BPMN ${esc(n.local)}.`+
+      (lane?`<br>Lane: <b>${esc(lane.name||lane.id)}</b>${lane.enh?' (enhanced)':''}`:'')+
+      (part?`<br>Pool: <b>${esc(part.name||part.id)}</b>${part.enh?` (${esc(part.boundary)})`:''}`:'');
+    main.appendChild(p);
+    if(lane&&lane.enh){
+      const note=el('div','note'); note.innerHTML='This element sits in an enhanced lane. If it carried an <b>enhancement</b> marker, it would inherit the lane envelope below.';
+      main.appendChild(note);
+    }
+  }
+  body.appendChild(main);
+  ins.appendChild(body);
+}
+
+function renderEdgeInspector(){
+  const ins=$('#inspector');
+  const e = STATE.diag.edges.find(x=>x.id===STATE.selectedEdge)
+         || STATE.diag.mfEdges.find(x=>x.id===STATE.selectedEdge);
+  const flow = STATE.model.flowsById.get(STATE.selectedEdge);
+  const mf = STATE.model.messageFlows.find(x=>x.id===STATE.selectedEdge);
+  const body=el('div'); body.id='inspBody';
+  const head=el('div','insp-head');
+  const eb=el('div','eyebrow'); eb.textContent = mf?'Message flow':'Sequence flow'; head.appendChild(eb);
+  const title=el('div','insp-title');
+  title.textContent = (e&&e.label) || (flow&&flow.name) || (mf&&mf.name) || STATE.selectedEdge;
+  head.appendChild(title);
+  const fromId=(flow&&flow.sourceRef)||(mf&&mf.sourceRef), toId=(flow&&flow.targetRef)||(mf&&mf.targetRef);
+  const sub=el('div','insp-sub'); sub.textContent=`${nm2(fromId)}  →  ${nm2(toId)}`; head.appendChild(sub);
+  body.appendChild(head);
+
+  const main=el('div','insp-body');
+  const note=el('div','note'); note.style.borderLeftColor='var(--token)';
+  let html=`Transition <b>${esc(STATE.selectedEdge)}</b> is outlined on the canvas.`;
+  if(flow&&flow.condition) html+=`<br><br>Condition:<br><span class="mono">${esc(flow.condition)}</span>`;
+  const src=fromId&&STATE.model.nodesById.get(fromId);
+  if(src && /Gateway$/.test(src.local) && src.default===STATE.selectedEdge)
+    html+=`<br><br>This is the <b>default</b> branch of ${esc(label(src))}.`;
+  note.innerHTML=html; main.appendChild(note);
+  body.appendChild(main);
+  ins.appendChild(body);
+}
+function nm2(id){ const n=id&&STATE.model.nodesById.get(id); return n?label(n):(id||'?'); }
+
+function renderResolver(root,n){
+  const pol=effectivePolicy(STATE.model,n);
+  const sec=el('section','block');
+  const eb=el('div','eyebrow'); eb.textContent='scope-chain resolver'; sec.appendChild(eb);
+
+  const res=el('div','resolver');
+  const SC={participant:'participant envelope',lane:'lane envelope',element:'element envelope'};
+  if(!pol.chain.length){
+    const band=el('div','scope-band element');
+    band.innerHTML='<div class="sname"><span class="tag"></span>element envelope</div><div class="svals">no envelope declared</div>';
+    res.appendChild(band);
+  }
+  for(const link of pol.chain){
+    const band=el('div','scope-band '+link.scope);
+    const nm=el('div','sname'); nm.innerHTML=`<span class="tag"></span>${SC[link.scope]} · ${esc(ownerName(link))}`;
+    band.appendChild(nm);
+    const sv=el('div','svals'); sv.innerHTML=envSummary(link.env); band.appendChild(sv);
+    res.appendChild(band);
+  }
+  sec.appendChild(res);
+
+  // effective policy table — only applies to nondeterministic (AI-operated) elements.
+  // Deterministic (Program-operated) elements execute fixed logic, so the guardrail
+  // policy table does not apply to them and is omitted.
+  const isAI = n.enh && n.enh.determinism==='nondeterministic';
+  if(isAI){
+  // effective policy table
+  const eff=el('div','eff');
+  const efh=el('div','efh'); efh.innerHTML='<span>effective policy</span><span>provenance</span>'; eff.appendChild(efh);
+
+  // toolAllow (with struck overrides)
+  const allowVal=el('div');
+  pol.toolAllow.forEach(t=>{const s=el('span','tool allow');s.textContent=t.ref;allowVal.appendChild(s);});
+  pol.overridden.forEach(o=>{const s=el('span','tool struck');s.title=`allowed at ${o.allowedBy}, denied at ${o.deniedBy}`;s.textContent=o.ref;allowVal.appendChild(s);});
+  if(!pol.toolAllow.length && !pol.overridden.length) allowVal.innerHTML='<span class="tool" style="opacity:.5">none</span>';
+  effRow(eff,'toolAllow',allowVal, pol.toolAllow[0]?pol.toolAllow[0].from:(pol.overridden[0]?pol.overridden[0].allowedBy:'none'));
+
+  // toolDeny
+  if(pol.toolDeny.length){
+    const dv=el('div'); pol.toolDeny.forEach(t=>{const s=el('span','tool deny');s.textContent=t.ref;dv.appendChild(s);});
+    effRow(eff,'toolDeny',dv, multiProv(pol.toolDeny.map(t=>t.from)));
+  }
+  // constraints
+  if(pol.constraints.length){
+    const cv=el('div'); cv.style.cssText='font-size:11.5px;line-height:1.5';
+    cv.innerHTML=pol.constraints.map(c=>`• ${esc(c.text||c.type||'')} <span style="color:var(--faint)">[${esc(c.from)}]</span>`).join('<br>');
+    effRow(eff,'constraint',cv, multiProv(pol.constraints.map(c=>c.from)));
+  }
+  // scalar fields
+  scalarRow(eff,'confidence', pol.confidenceThreshold);
+  scalarRow(eff,'maxSteps', pol.maxSteps);
+  scalarRow(eff,'timeBudget', pol.timeBudget);
+  scalarRow(eff,'retryPolicy', pol.retryPolicy);
+  // audited / irreversible
+  boolRow(eff,'audited', pol.audited);
+  const irrV=el('div'); irrV.innerHTML = pol.irreversible.val
+    ? '<span class="tool" style="color:var(--irrev);border-color:rgba(245,165,36,.4);background:rgba(245,165,36,.08)">true — human gate required</span>'
+    : '<span class="tool" style="opacity:.55">false</span>';
+  effRow(eff,'irreversible',irrV, pol.irreversible.val?'element':'none');
+
+  sec.appendChild(eff);
+
+  // contradictions
+  if(pol.overridden.length){
+    const note=el('div','note red');
+    note.innerHTML='<b>§6.3 contradiction.</b> '+pol.overridden.map(o=>
+      `<code style="font-family:var(--font-mono)">${esc(o.ref)}</code> is allowed at <b>${o.allowedBy}</b> but denied at <b>${o.deniedBy}</b>. The merge resolves safely (denial wins), but the document is non-conformant until reconciled.`).join('<br>');
+    sec.appendChild(note);
+  }
+  } // end if(isAI) — effective policy table omitted for deterministic elements
+  root.appendChild(sec);
+}
+function ownerName(link){
+  const o=link.owner; return o? (o.name||o.id||link.scope) : link.scope;
+}
+function envSummary(e){
+  if(!e) return 'none';
+  const parts=[];
+  if(e.toolAllow&&e.toolAllow.length) parts.push(kv('allow',e.toolAllow.map(t=>t.ref).join(' ')));
+  if(e.toolDeny&&e.toolDeny.length) parts.push(kv('deny',e.toolDeny.map(t=>t.ref).join(' ')));
+  if(e.confidenceThreshold!=null&&!Number.isNaN(e.confidenceThreshold)) parts.push(kv('conf',e.confidenceThreshold));
+  if(e.maxSteps!=null&&!Number.isNaN(e.maxSteps)) parts.push(kv('steps',e.maxSteps));
+  if(e.timeBudget) parts.push(kv('time',e.timeBudget));
+  if(e.retryPolicy) parts.push(kv('retry',e.retryPolicy));
+  if(e.audited) parts.push(kv('audited','true'));
+  if(e.constraints&&e.constraints.length) parts.push(kv('constraints',e.constraints.length));
+  return parts.length?parts.join(''):'envelope present · no bounded fields';
+}
+function kv(k,v){return `<span class="kv">${esc(k)} <b>${esc(v)}</b></span>`;}
+function effRow(eff,field,valEl,prov){
+  const r=el('div','effrow');
+  const f=el('div','f'); f.textContent=field; r.appendChild(f);
+  const v=el('div','v'); v.appendChild(valEl); r.appendChild(v);
+  const p=el('div','prov '+(prov||'none')); p.textContent=prov||'—'; r.appendChild(p);
+  eff.appendChild(r);
+}
+function scalarRow(eff,field,obj){
+  if(!obj||obj.val==null) return;
+  const v=el('div'); v.textContent=obj.val;
+  effRow(eff,field,v,obj.from);
+}
+function boolRow(eff,field,obj){
+  const v=el('div'); v.innerHTML = obj.val? '<b style="color:var(--audit)">true</b>' : '<span style="opacity:.55">false</span>';
+  effRow(eff,field,v, obj.val?obj.from:'none');
+}
+function multiProv(arr){const s=new Set(arr);return s.size===1?[...s][0]:'none';}
+
+function renderAgent(root,n){
+  const a=n.enh.agent; if(!a) return;
+  const sec=el('section','block');
+  sec.innerHTML=`<div class="eyebrow">agent</div>`;
+  const box=el('div','review');
+  box.innerHTML=`<div class="rh"><b>${esc(a.role||'(no role)')}</b>${a.modelClass?`<span class="rk" style="background:var(--raised2);color:var(--muted)">${esc(a.modelClass)}</span>`:''}</div>`+
+    (a.systemPrompt?`<div class="meta">system: ${esc(trim(a.systemPrompt,140))}</div>`:'')+
+    (a.inputContract?`<div class="meta">in: ${esc(trim(a.inputContract,120))}</div>`:'')+
+    (a.outputContract?`<div class="meta">out: ${esc(trim(a.outputContract,120))}</div>`:'');
+  sec.appendChild(box); root.appendChild(sec);
+}
+function renderReviews(root,n){
+  if(!n.enh.reviews.length) return;
+  const sec=el('section','block'); sec.innerHTML='<div class="eyebrow">reviews</div>';
+  n.enh.reviews.forEach(r=>{
+    const box=el('div','review');
+    const onfail=r.onFailRef?`<span class="meta">onFail → ${esc(trim(name(r.onFailRef),22))}</span>`:'';
+    box.innerHTML=`<div class="rh"><span class="rk ${esc(r.kind)}">${esc(r.kind||'?')}</span><span class="meta">maxRetries ${r.maxRetries}</span></div>`+
+      `<ul>${r.criteria.map(c=>`<li>${esc(c)}</li>`).join('')||'<li style="color:var(--deny)">no criterion</li>'}</ul>${onfail}`;
+    sec.appendChild(box);
+  });
+  root.appendChild(sec);
+}
+function renderEscalations(root,n){
+  if(!n.enh.escalations.length) return;
+  const sec=el('section','block'); sec.innerHTML='<div class="eyebrow">escalations</div>';
+  n.enh.escalations.forEach(s=>{
+    const note=el('div','note');
+    note.innerHTML=`when <b>${esc(s.when||'?')}</b>`+
+      (s.targetRef?` → <b>${esc(trim(name(s.targetRef),24))}</b>`:'')+
+      (s.sla?` <span style="color:var(--faint)">· sla ${esc(s.sla)}</span>`:'');
+    sec.appendChild(note);
+  });
+  root.appendChild(sec);
+}
+function renderProps(root,n){
+  if(!n.enh.properties.length) return;
+  const sec=el('section','block'); sec.innerHTML='<div class="eyebrow">properties</div>';
+  const box=el('div','review');
+  box.innerHTML=n.enh.properties.map(p=>`<div class="meta"><b style="color:var(--ink)">${esc(p.name)}</b> = ${esc(p.value)}</div>`).join('');
+  sec.appendChild(box); root.appendChild(sec);
+}
+
+/* ===================================================================
+   CONFORMANCE + LOG PANELS
+   =================================================================== */
+function renderValidation(){
+  const body=$('#validateBody'); body.textContent='';
+  const v=STATE.validation;
+  const errs=v.filter(o=>o.severity==='error').length;
+  const warns=v.filter(o=>o.severity==='warning').length;
+  // status pill
+  const pill=$('#statusPill'), st=$('#statusText');
+  pill.className='pill '+(errs?'err':'ok');
+  st.textContent = errs? `${errs} error${errs>1?'s':''}` : (warns?`conformant · ${warns} warning${warns>1?'s':''}`:'conformant');
+  // counts
+  const vc=$('#vCount'); vc.textContent=String(errs||warns||0);
+  vc.className='count'+(errs?' err':(warns?' warn':''));
+
+  for(const o of v){
+    const row=el('div','vrow');
+    const sev=el('div','sev '+o.severity); sev.textContent=o.severity==='ok'?'pass':o.severity; row.appendChild(sev);
+    const msg=el('div','vmsg'); msg.innerHTML=`<span class="code">${esc(o.code)}</span>${esc(o.message)}`; row.appendChild(msg);
+    if(o.ref){
+      const ref=el('div','vref'); ref.textContent=trim(o.ref,18);
+      ref.onclick=()=>{ if(STATE.model.nodesById.has(o.ref)) select(o.ref); else flashRef(o.ref); };
+      row.appendChild(ref);
+    }
+    body.appendChild(row);
+  }
+  if(!v.length){ const e=el('div','vrow'); e.innerHTML='<div class="vmsg" style="color:var(--muted)">No findings.</div>'; body.appendChild(e); }
+}
+function flashRef(id){ /* lane/participant refs: select nothing, just no-op visual */ }
+
+function logMsg(cls,ico,text){
+  STATE.log.push({cls,ico,text,t:STATE.tokenSeq});
+  if(STATE.log.length>400) STATE.log.shift();
+}
+function renderLog(){
+  const body=$('#logBody'); if(!body) return;
+  body.textContent='';
+  STATE.log.forEach((l,i)=>{
+    const row=el('div','logrow '+l.cls);
+    row.innerHTML=`<span class="t">${String(i).padStart(3,'0')}</span><span class="ico">${esc(l.ico)}</span><span>${esc(l.text)}</span>`;
+    body.appendChild(row);
+  });
+  $('#lCount').textContent=String(STATE.log.length);
+  body.scrollTop=body.scrollHeight;
+}
+
+/* ===================================================================
+   LOAD + WIRING
+   =================================================================== */
+function loadModel(xmlText, srcName){
+  pauseRun();
+  const m=parseModel(xmlText);
+  if(!m.ok){
+    STATE.model=null; STATE.diag=null; STATE.validation=[];
+    $('#canvas').textContent='';
+    const pill=$('#statusPill'); pill.className='pill err'; $('#statusText').textContent='parse error';
+    const body=$('#validateBody'); body.textContent='';
+    const row=el('div','vrow'); row.innerHTML=`<div class="sev error">error</div><div class="vmsg"><span class="code">PARSE</span>${esc(m.parseError||'could not parse XML')}</div>`;
+    body.appendChild(row);
+    return;
+  }
+  STATE.model=m;
+  STATE.diag=computeLayout(m);
+  STATE.validation=validate(m);
+  STATE.selectedId=null; STATE.log=[];
+  STATE.view={k:1,tx:0,ty:0};
+  renderDiagram(); renderValidation();
+  resetSim(true);
+  const enhNodes=[...m.nodesById.values()].filter(n=>n.enh);
+  const aiCount=enhNodes.filter(n=>n.enh.determinism==='nondeterministic').length;
+  const progCount=enhNodes.length-aiCount;
+  logMsg('sys','sys',`loaded ${srcName||'model'} · ${m.nodesById.size} nodes · ${aiCount} AI · ${progCount} Program`);
+  renderLog();
+  // inspector: auto-select first enhanced element
+  const firstEnh=[...m.nodesById.values()].find(n=>n.enh);
+  if(firstEnh) select(firstEnh.id); else renderInspector();
+}
+
+function wire(){
+  // samples
+  const samples=JSON.parse($('#samples').textContent);
+  STATE._samples=samples;
+  $('#sampleSel').addEventListener('change',e=>{
+    const s=samples[e.target.value]; if(s) loadModel(s, e.target.selectedOptions[0].textContent);
+  });
+  // file open
+  $('#loadBtn').addEventListener('click',()=>$('#fileInput').click());
+  $('#fileInput').addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const rd=new FileReader(); rd.onload=()=>loadModel(rd.result, f.name); rd.readAsText(f);
+  });
+  // drag/drop
+  const wrap=$('#canvasWrap'), dz=$('#dropZone');
+  ['dragenter','dragover'].forEach(ev=>wrap.addEventListener(ev,e=>{e.preventDefault();dz.style.display='flex';}));
+  ['dragleave','drop'].forEach(ev=>wrap.addEventListener(ev,e=>{e.preventDefault(); if(ev==='drop'||!wrap.contains(e.relatedTarget))dz.style.display='none';}));
+  wrap.addEventListener('drop',e=>{
+    const f=e.dataTransfer.files[0]; if(!f) return;
+    const rd=new FileReader(); rd.onload=()=>loadModel(rd.result,f.name); rd.readAsText(f);
+  });
+  // transport
+  $('#resetBtn').addEventListener('click',()=>resetSim(false));
+  $('#stepBtn').addEventListener('click',()=>{ if(STATE.running)pauseRun(); step(); });
+  $('#runBtn').addEventListener('click',()=>toggleRun());
+  $('#speedSel').addEventListener('change',e=>{ STATE.speed=+e.target.value; if(STATE.running)resumeRun(); });
+  $('#manualBtn').addEventListener('click',e=>{
+    STATE.manualBranch=!STATE.manualBranch;
+    e.target.classList.toggle('on',STATE.manualBranch);
+  });
+  // tabs
+  const expandPanel=()=>{ const mE=document.querySelector('main');
+    if(mE.classList.contains('bottom-min')){ mE.classList.remove('bottom-min');
+      const b=$('#minBtn'); b.textContent='▾'; b.title='Minimize panel'; } };
+  $('#tabValidate').addEventListener('click',()=>{ expandPanel(); switchTab('validate'); });
+  $('#tabLog').addEventListener('click',()=>{ expandPanel(); switchTab('log'); });
+  // minimize / restore the bottom panel to give the diagram more room
+  $('#minBtn').addEventListener('click',()=>{
+    const mainEl=document.querySelector('main');
+    const min=mainEl.classList.toggle('bottom-min');
+    const b=$('#minBtn');
+    b.textContent = min?'▴':'▾';
+    b.title = min?'Expand panel':'Minimize panel';
+  });
+  // canvas deselect + pan/zoom
+  const svg=$('#canvas');
+  // swallow the synthetic click that follows a pan-drag so it doesn't change selection
+  svg.addEventListener('click',e=>{
+    if(STATE._panMoved){ e.stopPropagation(); STATE._panMoved=false; return; }
+    // genuine click on empty canvas → clear an outlined arrow
+    if(STATE.selectedEdge && (e.target===svg || (e.target.id==='viewRoot'))){
+      STATE.selectedEdge=null; renderDiagram(); renderInspector();
+    }
+  },true);
+  svg.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const v=STATE.view, f=e.deltaY<0?1.12:1/1.12;
+    const nk=Math.min(4,Math.max(.3,v.k*f));
+    v.tx = (v.tx)*(nk/v.k); v.ty=(v.ty)*(nk/v.k); v.k=nk; applyView();
+  },{passive:false});
+  let pan=null;
+  svg.addEventListener('pointerdown',e=>{
+    if(e.button!==undefined && e.button!==0) return;          // primary button only
+    pan={x:e.clientX,y:e.clientY,tx:STATE.view.tx,ty:STATE.view.ty,pid:e.pointerId,moved:false};
+  });
+  svg.addEventListener('pointermove',e=>{
+    if(!pan)return;
+    const dx=e.clientX-pan.x, dy=e.clientY-pan.y;
+    if(!pan.moved && Math.hypot(dx,dy)>4){                     // promote to a drag past threshold
+      pan.moved=true; STATE._panMoved=true;
+      try{svg.setPointerCapture(pan.pid);}catch(_){}
+      svg.style.cursor='grabbing';
+    }
+    if(pan.moved){ STATE.view.tx=pan.tx+dx; STATE.view.ty=pan.ty+dy; applyView(); }
+  });
+  const endPan=()=>{ if(pan&&pan.moved){ try{svg.releasePointerCapture(pan.pid);}catch(_){}}  pan=null; svg.style.cursor='grab'; };
+  svg.addEventListener('pointerup',endPan);
+  svg.addEventListener('pointercancel',endPan);
+  svg.style.cursor='grab';
+
+  // keyboard
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+    if(e.key==='s'){ if(STATE.running)pauseRun(); step(); }
+    else if(e.key===' '){ e.preventDefault(); toggleRun(); }
+    else if(e.key==='r'){ resetSim(false); }
+  });
+
+  // initial
+  $('#sampleSel').value='conformant';
+  loadModel(samples['conformant'],'loan-review (conformant)');
+}
+function switchTab(which){
+  const v=which==='validate';
+  $('#tabValidate').classList.toggle('on',v);
+  $('#tabLog').classList.toggle('on',!v);
+  $('#validateBody').style.display=v?'':'none';
+  $('#logBody').style.display=v?'none':'';
+  if(!v) renderLog();
+}
+
+if(document.readyState!=='loading') wire(); else document.addEventListener('DOMContentLoaded',wire);
+
+</script>
+</body>
+</html>
