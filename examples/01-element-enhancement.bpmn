@@ -3,29 +3,30 @@
   ============================================================================
   BPMNx EXAMPLE 01 — ELEMENT SCOPE (incl. typed event enhancement)
 
-  The core case: individual elements marked AI-operated. Demonstrates:
+  The core case: individual elements marked agent-operated. Demonstrates:
     - a TYPED start event (message) that is enhanced (the agent judges
       whether an incoming message warrants starting the process)
     - an enhanced service task with full envelope
-    - an enhanced gateway (AI-evaluated routing)
+    - an enhanced gateway (AI-evaluated routing) whose every declared
+      outcome has a named outgoing flow (§4.4)
     - critic + adversary reviews on the same element
-    - an irreversible action gated behind a standard human userTask
+    - escalation / onFail routes that are drawn on the diagram: each target
+      is reached through a typed boundary event on the element (§4.3)
+    - a deterministic ("Program") element: the send is enhanced so its tool
+      and audit envelope are declared, but no model judgment is involved
+    - that irreversible send gated by a standard human userTask placed
+      immediately upstream (§5.1)
 
-  Run:  python3 tools/validate_bpmnx.py examples/01-element-enhancement.bpmn
+  Run:  python tools/validate_bpmnx.py examples/01-element-enhancement.bpmn
   ============================================================================
--->
-<bpmn:definitions
-    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
-    id="Definitions_Element"
-    targetNamespace="http://bpmn.io/schema/bpmn">
+--><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Element" targetNamespace="http://bpmn.io/schema/bpmn">
 
   <bpmn:process id="Process_Element" isExecutable="true">
 
     <!-- TYPED start event (message) — enhanced: agent judges qualifying intake -->
     <bpmn:startEvent id="Start_Intake" name="Inbound Message">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="intake-screener">
             <bpmnx:outputContract>start | ignore, with reason</bpmnx:outputContract>
           </bpmnx:agent>
@@ -40,15 +41,14 @@
 
     <bpmn:serviceTask id="Task_Classify" name="Classify &amp; Score">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="qualifier" modelClass="frontier-class">
             <bpmnx:inputContract>Contact record with firmographics</bpmnx:inputContract>
             <bpmnx:outputContract>Score 0-100 with confidence and rationale</bpmnx:outputContract>
           </bpmnx:agent>
-          <bpmnx:envelope confidenceThreshold="0.70" timeBudget="PT15M" audited="true"
-                          retryPolicy="retry-once-then-flag">
+          <bpmnx:envelope confidenceThreshold="0.70" timeBudget="PT15M" audited="true" retryPolicy="retry-once-then-flag">
             <bpmnx:toolAllow ref="crm.read">Read CRM contact and account</bpmnx:toolAllow>
-            <bpmnx:toolDeny  ref="email.send">No outbound email from this step</bpmnx:toolDeny>
+            <bpmnx:toolDeny ref="email.send">No outbound email from this step</bpmnx:toolDeny>
             <bpmnx:constraint type="method">Scoring must reference the ICP rubric</bpmnx:constraint>
           </bpmnx:envelope>
           <bpmnx:escalation when="confidence &lt; 0.70" targetRef="Task_HumanReview" sla="P1D">
@@ -60,10 +60,16 @@
       <bpmn:outgoing>F2</bpmn:outgoing>
     </bpmn:serviceTask>
 
+    <!-- Typed boundary event: the drawn path for the low-confidence escalation -->
+    <bpmn:boundaryEvent id="Bnd_ClassifyEscalate" name="Low confidence" attachedToRef="Task_Classify" cancelActivity="true">
+      <bpmn:outgoing>F_Esc</bpmn:outgoing>
+      <bpmn:escalationEventDefinition id="EED_Classify"/>
+    </bpmn:boundaryEvent>
+
     <!-- Enhanced gateway: AI-evaluated routing -->
     <bpmn:exclusiveGateway id="Gw_Route" name="Qualified?">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="routing-judge">
             <bpmnx:outputContract>qualified | disqualified | needs-human</bpmnx:outputContract>
           </bpmnx:agent>
@@ -75,17 +81,18 @@
       <bpmn:incoming>F2</bpmn:incoming>
       <bpmn:outgoing>F_Qualified</bpmn:outgoing>
       <bpmn:outgoing>F_Human</bpmn:outgoing>
+      <bpmn:outgoing>F_Disqualified</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Task_Draft" name="Draft Outreach">
       <bpmn:extensionElements>
-        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+        <bpmnx:enhancement version="1.1" determinism="nondeterministic">
           <bpmnx:agent role="writer">
             <bpmnx:outputContract>Email, subject + body, under 250 words</bpmnx:outputContract>
           </bpmnx:agent>
           <bpmnx:envelope timeBudget="PT15M" maxSteps="5" audited="true">
             <bpmnx:toolAllow ref="crm.read">Read contact for personalization</bpmnx:toolAllow>
-            <bpmnx:toolDeny  ref="email.send">Draft only; human approves send</bpmnx:toolDeny>
+            <bpmnx:toolDeny ref="email.send">Draft only; human approves send</bpmnx:toolDeny>
             <bpmnx:constraint type="tone">Professional, warm; no pressure</bpmnx:constraint>
             <bpmnx:constraint type="compliance">No pricing or SLA commitments</bpmnx:constraint>
           </bpmnx:envelope>
@@ -104,31 +111,152 @@
       <bpmn:outgoing>F3</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <!-- Standard userTask gating the irreversible send -->
-    <bpmn:userTask id="Task_Approve" name="Rep Approves &amp; Sends">
+    <!-- Typed boundary event: the drawn path when either review exhausts its retries -->
+    <bpmn:boundaryEvent id="Bnd_DraftReviewFail" name="Review failed" attachedToRef="Task_Draft" cancelActivity="true">
+      <bpmn:outgoing>F_ReviewFail</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrED_Draft"/>
+    </bpmn:boundaryEvent>
+
+    <!-- Standard userTask: the human gate immediately upstream of the irreversible send -->
+    <bpmn:userTask id="Task_Approve" name="Rep Approves Draft">
       <bpmn:incoming>F3</bpmn:incoming>
       <bpmn:outgoing>F4</bpmn:outgoing>
     </bpmn:userTask>
 
+    <!-- Program element: enhanced (tool + audit envelope declared) but deterministic.
+         irreversible="true" requires the human gate directly upstream (§5.1, §7.1). -->
+    <bpmn:sendTask id="Task_Send" name="Send Email">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.1" determinism="deterministic">
+          <bpmnx:envelope irreversible="true" audited="true" timeBudget="PT1M">
+            <bpmnx:toolAllow ref="email.send">Send exactly the approved draft</bpmnx:toolAllow>
+            <bpmnx:constraint type="policy">Body must be byte-identical to the approved draft</bpmnx:constraint>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>F4</bpmn:incoming>
+      <bpmn:outgoing>F4b</bpmn:outgoing>
+    </bpmn:sendTask>
+
     <bpmn:userTask id="Task_HumanReview" name="Human Review">
       <bpmn:incoming>F_Human</bpmn:incoming>
+      <bpmn:incoming>F_Esc</bpmn:incoming>
+      <bpmn:incoming>F_ReviewFail</bpmn:incoming>
       <bpmn:outgoing>F5</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:endEvent id="End_Sent" name="Outreach Sent">
-      <bpmn:incoming>F4</bpmn:incoming>
+      <bpmn:incoming>F4b</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:endEvent id="End_Manual" name="Handled by Human">
       <bpmn:incoming>F5</bpmn:incoming>
     </bpmn:endEvent>
+    <bpmn:endEvent id="End_Disqualified" name="Disqualified">
+      <bpmn:incoming>F_Disqualified</bpmn:incoming>
+    </bpmn:endEvent>
 
-    <bpmn:sequenceFlow id="F1"          sourceRef="Start_Intake"  targetRef="Task_Classify"/>
-    <bpmn:sequenceFlow id="F2"          sourceRef="Task_Classify" targetRef="Gw_Route"/>
-    <bpmn:sequenceFlow id="F_Qualified" sourceRef="Gw_Route"      targetRef="Task_Draft"      name="qualified"/>
-    <bpmn:sequenceFlow id="F_Human"     sourceRef="Gw_Route"      targetRef="Task_HumanReview" name="needs-human"/>
-    <bpmn:sequenceFlow id="F3"          sourceRef="Task_Draft"    targetRef="Task_Approve"/>
-    <bpmn:sequenceFlow id="F4"          sourceRef="Task_Approve"  targetRef="End_Sent"/>
-    <bpmn:sequenceFlow id="F5"          sourceRef="Task_HumanReview" targetRef="End_Manual"/>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start_Intake" targetRef="Task_Classify"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_Classify" targetRef="Gw_Route"/>
+    <bpmn:sequenceFlow id="F_Qualified" sourceRef="Gw_Route" targetRef="Task_Draft" name="qualified"/>
+    <bpmn:sequenceFlow id="F_Human" sourceRef="Gw_Route" targetRef="Task_HumanReview" name="needs-human"/>
+    <bpmn:sequenceFlow id="F_Disqualified" sourceRef="Gw_Route" targetRef="End_Disqualified" name="disqualified"/>
+    <bpmn:sequenceFlow id="F_Esc" sourceRef="Bnd_ClassifyEscalate" targetRef="Task_HumanReview"/>
+    <bpmn:sequenceFlow id="F_ReviewFail" sourceRef="Bnd_DraftReviewFail" targetRef="Task_HumanReview"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Task_Draft" targetRef="Task_Approve"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Task_Approve" targetRef="Task_Send"/>
+    <bpmn:sequenceFlow id="F4b" sourceRef="Task_Send" targetRef="End_Sent"/>
+    <bpmn:sequenceFlow id="F5" sourceRef="Task_HumanReview" targetRef="End_Manual"/>
 
   </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Element">
+      <bpmndi:BPMNShape id="Start_Intake_di" bpmnElement="Start_Intake">
+        <dc:Bounds x="147" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Classify_di" bpmnElement="Task_Classify">
+        <dc:Bounds x="280" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gw_Route_di" bpmnElement="Gw_Route" isMarkerVisible="true">
+        <dc:Bounds x="480" y="95" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Draft_di" bpmnElement="Task_Draft">
+        <dc:Bounds x="620" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Approve_di" bpmnElement="Task_Approve">
+        <dc:Bounds x="790" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Send_di" bpmnElement="Task_Send">
+        <dc:Bounds x="960" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_HumanReview_di" bpmnElement="Task_HumanReview">
+        <dc:Bounds x="790" y="200" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Sent_di" bpmnElement="End_Sent">
+        <dc:Bounds x="1167" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Manual_di" bpmnElement="End_Manual">
+        <dc:Bounds x="997" y="222" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Disqualified_di" bpmnElement="End_Disqualified">
+        <dc:Bounds x="657" y="342" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Bnd_ClassifyEscalate_di" bpmnElement="Bnd_ClassifyEscalate">
+        <dc:Bounds x="350" y="142" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Bnd_DraftReviewFail_di" bpmnElement="Bnd_DraftReviewFail">
+        <dc:Bounds x="690" y="142" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1">
+        <di:waypoint x="183" y="120"/>
+        <di:waypoint x="280" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2">
+        <di:waypoint x="390" y="120"/>
+        <di:waypoint x="480" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_Qualified_di" bpmnElement="F_Qualified">
+        <di:waypoint x="530" y="120"/>
+        <di:waypoint x="620" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_Human_di" bpmnElement="F_Human">
+        <di:waypoint x="530" y="120"/>
+        <di:waypoint x="550" y="120"/>
+        <di:waypoint x="550" y="240"/>
+        <di:waypoint x="790" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_Disqualified_di" bpmnElement="F_Disqualified">
+        <di:waypoint x="530" y="120"/>
+        <di:waypoint x="550" y="120"/>
+        <di:waypoint x="550" y="360"/>
+        <di:waypoint x="657" y="360"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_Esc_di" bpmnElement="F_Esc">
+        <di:waypoint x="368" y="178"/>
+        <di:waypoint x="368" y="240"/>
+        <di:waypoint x="790" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_ReviewFail_di" bpmnElement="F_ReviewFail">
+        <di:waypoint x="708" y="178"/>
+        <di:waypoint x="708" y="240"/>
+        <di:waypoint x="790" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3">
+        <di:waypoint x="730" y="120"/>
+        <di:waypoint x="790" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4">
+        <di:waypoint x="900" y="120"/>
+        <di:waypoint x="960" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4b_di" bpmnElement="F4b">
+        <di:waypoint x="1070" y="120"/>
+        <di:waypoint x="1167" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F5_di" bpmnElement="F5">
+        <di:waypoint x="900" y="240"/>
+        <di:waypoint x="997" y="240"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </bpmn:definitions>

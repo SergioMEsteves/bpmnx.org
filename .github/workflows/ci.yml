@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: pip install -r requirements.txt pytest
+      - run: npm ci
+        working-directory: tests
+      - name: Fixture tests
+        run: pytest -q tests
+      - name: Bench <-> Python parity
+        run: node tests/parity.mjs
+        env: { PYTHON: python }
+      - name: Examples conform (02 is the intentional failure)
+        run: python tools/validate_bpmnx.py --strict examples/01-*.bpmn examples/02b-*.bpmn examples/03-*.bpmn

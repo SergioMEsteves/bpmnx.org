@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AI gateway: outcome "maybe" has no flow; flow "other" matches no outcome; default flow is exempt -->
+<!-- expect: W-GW-OUTCOME@G W-GW-FLOW@G -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" id="D" targetNamespace="http://example.org/t">
+<bpmn:process id="P">
+  <bpmn:startEvent id="S"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+  <bpmn:exclusiveGateway id="G" default="fd"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="nondeterministic"><bpmnx:agent role="j"><bpmnx:outputContract>yes | no | maybe, with reason</bpmnx:outputContract></bpmnx:agent></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>fy</bpmn:outgoing><bpmn:outgoing>fn</bpmn:outgoing><bpmn:outgoing>fo</bpmn:outgoing><bpmn:outgoing>fd</bpmn:outgoing></bpmn:exclusiveGateway>
+  <bpmn:endEvent id="E"><bpmn:incoming>fy</bpmn:incoming><bpmn:incoming>fn</bpmn:incoming><bpmn:incoming>fo</bpmn:incoming><bpmn:incoming>fd</bpmn:incoming></bpmn:endEvent>
+  <bpmn:sequenceFlow id="f1" sourceRef="S" targetRef="G"/>
+  <bpmn:sequenceFlow id="fy" sourceRef="G" targetRef="E" name="Yes"/><bpmn:sequenceFlow id="fn" sourceRef="G" targetRef="E" name="no"/>
+  <bpmn:sequenceFlow id="fo" sourceRef="G" targetRef="E" name="other"/><bpmn:sequenceFlow id="fd" sourceRef="G" targetRef="E" name="fallback"/>
+</bpmn:process>
+</bpmn:definitions>

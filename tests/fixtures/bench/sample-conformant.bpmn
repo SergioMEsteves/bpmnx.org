@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Bench embedded sample, kept verbatim in the 1.0 namespace as a legacy fixture. -->
+<!-- expect: W-LEGACY-NS -->
+<bpmn:definitions
+    xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.0/bpmnx"
+    id="defs_loan" targetNamespace="http://example.org/loan">
+
+  <bpmn:collaboration id="collab1">
+    <bpmn:participant id="poolLender" name="Lender" processRef="loanProc">
+      <bpmn:extensionElements>
+        <bpmnx:participantEnhancement version="1.0" determinism="nondeterministic" boundary="whiteBox">
+          <bpmnx:envelope confidenceThreshold="0.5" audited="true">
+            <bpmnx:constraint type="compliance">All decisions traceable to a human-reviewable record (FCRA).</bpmnx:constraint>
+          </bpmnx:envelope>
+        </bpmnx:participantEnhancement>
+      </bpmn:extensionElements>
+    </bpmn:participant>
+    <bpmn:participant id="poolUW" name="AI Underwriting Service">
+      <bpmn:extensionElements>
+        <bpmnx:participantEnhancement version="1.0" determinism="nondeterministic" boundary="blackBox">
+          <bpmnx:agent role="external-underwriter" modelClass="frontier-reasoning"/>
+          <bpmnx:envelope confidenceThreshold="0.7" audited="true" timeBudget="PT30S">
+            <bpmnx:toolDeny ref="pii.export">may not export raw PII off-platform</bpmnx:toolDeny>
+          </bpmnx:envelope>
+          <bpmnx:review kind="critic">
+            <bpmnx:criterion>score is justified by the supplied features only</bpmnx:criterion>
+          </bpmnx:review>
+        </bpmnx:participantEnhancement>
+      </bpmn:extensionElements>
+    </bpmn:participant>
+    <bpmn:messageFlow id="mf1" name="risk request" sourceRef="taskAssess" targetRef="poolUW"/>
+    <bpmn:messageFlow id="mf2" name="risk score" sourceRef="poolUW" targetRef="taskAssess"/>
+  </bpmn:collaboration>
+
+  <bpmn:process id="loanProc" isExecutable="true">
+    <bpmn:laneSet>
+      <bpmn:lane id="laneAI" name="AI Operations">
+        <bpmn:extensionElements>
+          <bpmnx:laneEnhancement version="1.0">
+            <bpmnx:envelope confidenceThreshold="0.6" audited="true" maxSteps="12" timeBudget="PT2M">
+              <bpmnx:toolDeny ref="email.send">no element in this band may send email</bpmnx:toolDeny>
+              <bpmnx:constraint type="policy">log every tool call with inputs and outputs</bpmnx:constraint>
+            </bpmnx:envelope>
+          </bpmnx:laneEnhancement>
+        </bpmn:extensionElements>
+        <bpmn:flowNodeRef>startApp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>taskAssess</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>gwApprove</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>taskApprove</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>taskDisburse</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>taskManual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>endDone</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="startApp" name="Application received">
+      <bpmn:outgoing>f0</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="taskAssess" name="Assess application">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+          <bpmnx:agent role="underwriter" modelClass="frontier-reasoning">
+            <bpmnx:systemPrompt>Assess creditworthiness from the application packet. Cite every factor.</bpmnx:systemPrompt>
+            <bpmnx:outputContract>{ decision: approve|refer, score: 0-1, rationale: string }</bpmnx:outputContract>
+          </bpmnx:agent>
+          <bpmnx:envelope confidenceThreshold="0.8" maxSteps="8" timeBudget="PT45S" retryPolicy="exponential-3" irreversible="false">
+            <bpmnx:toolAllow ref="crm.read">read customer record</bpmnx:toolAllow>
+            <bpmnx:toolAllow ref="bureau.read">pull credit bureau report</bpmnx:toolAllow>
+          </bpmnx:envelope>
+          <bpmnx:review kind="critic" maxRetries="2" onFailRef="taskManual">
+            <bpmnx:criterion>decision matches the rationale</bpmnx:criterion>
+            <bpmnx:criterion>output conforms to the output contract</bpmnx:criterion>
+          </bpmnx:review>
+          <bpmnx:review kind="adversary" maxRetries="1" onFailRef="taskManual">
+            <bpmnx:criterion>no protected-class proxy drove the score</bpmnx:criterion>
+          </bpmnx:review>
+          <bpmnx:escalation when="score &lt; confidenceThreshold" targetRef="taskManual" sla="PT4H">low confidence routes to a human underwriter</bpmnx:escalation>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f0</bpmn:incoming>
+      <bpmn:outgoing>f1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="gwApprove" name="Approve?">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="nondeterministic">
+          <bpmnx:agent role="router"/>
+          <bpmnx:envelope confidenceThreshold="0.75"/>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+      <bpmn:outgoing>f3</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="taskApprove" name="Approve disbursement">
+      <bpmn:incoming>f2</bpmn:incoming>
+      <bpmn:outgoing>f4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="taskDisburse" name="Disburse funds">
+      <bpmn:extensionElements>
+        <bpmnx:enhancement version="1.0" determinism="deterministic">
+          <bpmnx:agent role="payments-agent"/>
+          <bpmnx:envelope irreversible="true" audited="true" maxSteps="3">
+            <bpmnx:toolAllow ref="ledger.transfer">move funds to borrower account</bpmnx:toolAllow>
+          </bpmnx:envelope>
+        </bpmnx:enhancement>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f4</bpmn:incoming>
+      <bpmn:outgoing>f5</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="taskManual" name="Manual review">
+      <bpmn:incoming>f3</bpmn:incoming>
+      <bpmn:outgoing>f6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="endDone" name="Done">
+      <bpmn:incoming>f5</bpmn:incoming>
+      <bpmn:incoming>f6</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="f0" sourceRef="startApp"   targetRef="taskAssess"/>
+    <bpmn:sequenceFlow id="f1" sourceRef="taskAssess" targetRef="gwApprove"/>
+    <bpmn:sequenceFlow id="f2" name="approve" sourceRef="gwApprove" targetRef="taskApprove"/>
+    <bpmn:sequenceFlow id="f3" name="refer"   sourceRef="gwApprove" targetRef="taskManual"/>
+    <bpmn:sequenceFlow id="f4" sourceRef="taskApprove" targetRef="taskDisburse"/>
+    <bpmn:sequenceFlow id="f5" sourceRef="taskDisburse" targetRef="endDone"/>
+    <bpmn:sequenceFlow id="f6" sourceRef="taskManual"  targetRef="endDone"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="diag">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collab1">
+      <bpmndi:BPMNShape id="s_poolLender" bpmnElement="poolLender" isHorizontal="true">
+        <dc:Bounds x="40" y="40" width="1010" height="320"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_laneAI" bpmnElement="laneAI" isHorizontal="true">
+        <dc:Bounds x="70" y="40" width="980" height="320"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_startApp" bpmnElement="startApp">
+        <dc:Bounds x="100" y="170" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_taskAssess" bpmnElement="taskAssess">
+        <dc:Bounds x="175" y="152" width="132" height="74"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_gwApprove" bpmnElement="gwApprove" isMarkerVisible="true">
+        <dc:Bounds x="355" y="166" width="46" height="46"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_taskApprove" bpmnElement="taskApprove">
+        <dc:Bounds x="455" y="80" width="132" height="68"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_taskDisburse" bpmnElement="taskDisburse">
+        <dc:Bounds x="640" y="80" width="132" height="68"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_taskManual" bpmnElement="taskManual">
+        <dc:Bounds x="455" y="244" width="132" height="68"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_endDone" bpmnElement="endDone">
+        <dc:Bounds x="840" y="170" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_poolUW" bpmnElement="poolUW" isHorizontal="true">
+        <dc:Bounds x="40" y="392" width="1010" height="110"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_f0" bpmnElement="f0"/>
+      <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1"/>
+      <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2"/>
+      <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3"/>
+      <bpmndi:BPMNEdge id="e_f4" bpmnElement="f4"/>
+      <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5"/>
+      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6"/>
+      <bpmndi:BPMNEdge id="e_mf1" bpmnElement="mf1"/>
+      <bpmndi:BPMNEdge id="e_mf2" bpmnElement="mf2"/>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

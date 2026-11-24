@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nested lanes: outer denies db.write, inner allows it on element -> contradiction against outer lane -->
+<!-- expect: E-CONTRADICTION@T -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" id="D" targetNamespace="http://example.org/t">
+<bpmn:process id="P">
+  <bpmn:laneSet id="LS"><bpmn:lane id="Outer" name="Outer">
+    <bpmn:extensionElements><bpmnx:laneEnhancement version="1.1"><bpmnx:envelope timeBudget="PT10M"><bpmnx:toolDeny ref="db.write"/></bpmnx:envelope></bpmnx:laneEnhancement></bpmn:extensionElements>
+    <bpmn:childLaneSet id="CLS"><bpmn:lane id="Inner" name="Inner">
+      <bpmn:extensionElements><bpmnx:laneEnhancement version="1.1"><bpmnx:envelope timeBudget="PT1H" audited="true"/></bpmnx:laneEnhancement></bpmn:extensionElements>
+      <bpmn:flowNodeRef>S</bpmn:flowNodeRef><bpmn:flowNodeRef>T</bpmn:flowNodeRef><bpmn:flowNodeRef>E</bpmn:flowNodeRef>
+    </bpmn:lane></bpmn:childLaneSet>
+  </bpmn:lane></bpmn:laneSet>
+  <bpmn:startEvent id="S"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+  <bpmn:serviceTask id="T"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="nondeterministic"><bpmnx:envelope><bpmnx:toolAllow ref="db.write"/></bpmnx:envelope></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:serviceTask>
+  <bpmn:endEvent id="E"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+  <bpmn:sequenceFlow id="f1" sourceRef="S" targetRef="T"/><bpmn:sequenceFlow id="f2" sourceRef="T" targetRef="E"/>
+</bpmn:process>
+</bpmn:definitions>

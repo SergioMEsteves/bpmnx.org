@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Escalation target and adversary onFail target exist but is not on any drawn path from the element; review onFail via boundary event is fine -->
+<!-- expect: E-REF-UNREACHABLE@T E-REF-UNREACHABLE@T -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmnx="http://bpmnx.org/schema/1.1/bpmnx" id="D" targetNamespace="http://example.org/t">
+<bpmn:process id="P">
+  <bpmn:startEvent id="S"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+  <bpmn:serviceTask id="T"><bpmn:extensionElements><bpmnx:enhancement version="1.1" determinism="nondeterministic"><bpmnx:review kind="critic" onFailRef="H2"><bpmnx:criterion>a</bpmnx:criterion></bpmnx:review><bpmnx:review kind="adversary" onFailRef="H1"><bpmnx:criterion>ok</bpmnx:criterion></bpmnx:review><bpmnx:escalation when="x" targetRef="H1"/></bpmnx:enhancement></bpmn:extensionElements><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:serviceTask>
+  <bpmn:boundaryEvent id="B" attachedToRef="T"><bpmn:outgoing>f3</bpmn:outgoing><bpmn:errorEventDefinition id="er"/></bpmn:boundaryEvent>
+  <bpmn:userTask id="H2"><bpmn:incoming>f3</bpmn:incoming><bpmn:outgoing>f4</bpmn:outgoing></bpmn:userTask>
+  <bpmn:userTask id="H1"><bpmn:outgoing>f5</bpmn:outgoing></bpmn:userTask>
+  <bpmn:endEvent id="E"><bpmn:incoming>f2</bpmn:incoming><bpmn:incoming>f4</bpmn:incoming><bpmn:incoming>f5</bpmn:incoming></bpmn:endEvent>
+  <bpmn:sequenceFlow id="f1" sourceRef="S" targetRef="T"/><bpmn:sequenceFlow id="f2" sourceRef="T" targetRef="E"/>
+  <bpmn:sequenceFlow id="f3" sourceRef="B" targetRef="H2"/><bpmn:sequenceFlow id="f4" sourceRef="H2" targetRef="E"/>
+  <bpmn:sequenceFlow id="f5" sourceRef="H1" targetRef="E"/>
+</bpmn:process>
+</bpmn:definitions>
