@@ -220,15 +220,13 @@
         <di:waypoint x="620" y="120"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Human_di" bpmnElement="F_Human">
-        <di:waypoint x="530" y="120"/>
-        <di:waypoint x="550" y="120"/>
-        <di:waypoint x="550" y="240"/>
+        <di:waypoint x="505" y="145"/>
+        <di:waypoint x="505" y="240"/>
         <di:waypoint x="790" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Disqualified_di" bpmnElement="F_Disqualified">
-        <di:waypoint x="530" y="120"/>
-        <di:waypoint x="550" y="120"/>
-        <di:waypoint x="550" y="360"/>
+        <di:waypoint x="505" y="145"/>
+        <di:waypoint x="505" y="360"/>
         <di:waypoint x="657" y="360"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Esc_di" bpmnElement="F_Esc">

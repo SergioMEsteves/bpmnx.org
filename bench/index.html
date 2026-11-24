@@ -1277,7 +1277,14 @@ function renderDiagram(){
   const labLayer=svgNode('g',{id:'labelLayer'}); root.appendChild(labLayer);
   for(const e of d.edges){
     if(!e.label) continue;
-    const pos=clearLabelPoint(e.pts, d.boxes, e.branch?0.28:0.5);
+    // a branch whose route bends: label its last run, where it is no longer
+    // sharing a trunk with sibling branches
+    let pos=null;
+    if(e.branch && e.pts && e.pts.length>=3){
+      const a=e.pts[e.pts.length-2], b=e.pts[e.pts.length-1];
+      if(Math.hypot(b.x-a.x,b.y-a.y)>60) pos=clearLabelPoint([a,b], d.boxes, 0.4);
+    }
+    if(!pos) pos=clearLabelPoint(e.pts, d.boxes, e.branch?0.28:0.5);
     drawEdgeLabel(labLayer, e.label, pos.x, pos.y, e.branch, e.id===STATE.selectedEdge);
   }
   // token layer on top

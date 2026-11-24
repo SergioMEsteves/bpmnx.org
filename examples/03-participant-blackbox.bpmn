@@ -82,50 +82,50 @@
 
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collab_1">
+      <bpmndi:BPMNShape id="Part_Underwriting_di" bpmnElement="Part_Underwriting" isHorizontal="true">
+        <dc:Bounds x="40" y="40" width="960" height="80"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Part_Origination_di" bpmnElement="Part_Origination" isHorizontal="true">
-        <dc:Bounds x="40" y="40" width="960" height="160"/>
+        <dc:Bounds x="40" y="160" width="960" height="160"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Start_App_di" bpmnElement="Start_App">
-        <dc:Bounds x="177" y="102" width="36" height="36"/>
+        <dc:Bounds x="177" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_SendApp_di" bpmnElement="Task_SendApp">
-        <dc:Bounds x="310" y="80" width="110" height="80"/>
+        <dc:Bounds x="310" y="200" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_Decision_di" bpmnElement="Event_Decision">
-        <dc:Bounds x="517" y="102" width="36" height="36"/>
+        <dc:Bounds x="517" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_Notify_di" bpmnElement="Task_Notify">
-        <dc:Bounds x="650" y="80" width="110" height="80"/>
+        <dc:Bounds x="650" y="200" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_App_di" bpmnElement="End_App">
-        <dc:Bounds x="857" y="102" width="36" height="36"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Part_Underwriting_di" bpmnElement="Part_Underwriting" isHorizontal="true">
-        <dc:Bounds x="40" y="240" width="700" height="80"/>
+        <dc:Bounds x="857" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="S1_di" bpmnElement="S1">
-        <di:waypoint x="213" y="120"/>
-        <di:waypoint x="310" y="120"/>
+        <di:waypoint x="213" y="240"/>
+        <di:waypoint x="310" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="S2_di" bpmnElement="S2">
-        <di:waypoint x="420" y="120"/>
-        <di:waypoint x="517" y="120"/>
+        <di:waypoint x="420" y="240"/>
+        <di:waypoint x="517" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="S3_di" bpmnElement="S3">
-        <di:waypoint x="553" y="120"/>
-        <di:waypoint x="650" y="120"/>
+        <di:waypoint x="553" y="240"/>
+        <di:waypoint x="650" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="S4_di" bpmnElement="S4">
-        <di:waypoint x="760" y="120"/>
-        <di:waypoint x="857" y="120"/>
+        <di:waypoint x="760" y="240"/>
+        <di:waypoint x="857" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="MF_Request_di" bpmnElement="MF_Request">
-        <di:waypoint x="365" y="160"/>
-        <di:waypoint x="365" y="240"/>
+        <di:waypoint x="365" y="200"/>
+        <di:waypoint x="365" y="120"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="MF_Response_di" bpmnElement="MF_Response">
-        <di:waypoint x="535" y="240"/>
-        <di:waypoint x="535" y="138"/>
+        <di:waypoint x="535" y="120"/>
+        <di:waypoint x="535" y="222"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
