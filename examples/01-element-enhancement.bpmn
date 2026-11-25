@@ -202,10 +202,10 @@
         <dc:Bounds x="657" y="342" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Bnd_ClassifyEscalate_di" bpmnElement="Bnd_ClassifyEscalate">
-        <dc:Bounds x="350" y="142" width="36" height="36"/>
+        <dc:Bounds x="284" y="142" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Bnd_DraftReviewFail_di" bpmnElement="Bnd_DraftReviewFail">
-        <dc:Bounds x="690" y="142" width="36" height="36"/>
+        <dc:Bounds x="624" y="142" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1">
         <di:waypoint x="183" y="120"/>
@@ -220,24 +220,26 @@
         <di:waypoint x="620" y="120"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Human_di" bpmnElement="F_Human">
-        <di:waypoint x="505" y="145"/>
-        <di:waypoint x="505" y="240"/>
+        <di:waypoint x="509" y="141"/>
+        <di:waypoint x="509" y="240"/>
         <di:waypoint x="790" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Disqualified_di" bpmnElement="F_Disqualified">
-        <di:waypoint x="505" y="145"/>
-        <di:waypoint x="505" y="360"/>
+        <di:waypoint x="501" y="141"/>
+        <di:waypoint x="501" y="360"/>
         <di:waypoint x="657" y="360"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_Esc_di" bpmnElement="F_Esc">
-        <di:waypoint x="368" y="178"/>
-        <di:waypoint x="368" y="240"/>
-        <di:waypoint x="790" y="240"/>
+        <di:waypoint x="302" y="178"/>
+        <di:waypoint x="302" y="272"/>
+        <di:waypoint x="845" y="272"/>
+        <di:waypoint x="845" y="280"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_ReviewFail_di" bpmnElement="F_ReviewFail">
-        <di:waypoint x="708" y="178"/>
-        <di:waypoint x="708" y="240"/>
-        <di:waypoint x="790" y="240"/>
+        <di:waypoint x="642" y="178"/>
+        <di:waypoint x="642" y="180"/>
+        <di:waypoint x="845" y="180"/>
+        <di:waypoint x="845" y="200"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3">
         <di:waypoint x="730" y="120"/>
