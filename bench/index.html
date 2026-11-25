@@ -213,7 +213,7 @@
     <option value="280">2×</option>
     <option value="120">4×</option>
   </select>
-  <div class="seg"><button id="manualBtn" class="on" title="Pick branches at AI gateways">⛢ Manual branch</button></div>
+  <div class="seg"><button id="manualBtn" class="on" title="Pick gateway branches and boundary-event paths by hand">⛢ Manual branch</button></div>
 </header>
 
 <main>
@@ -1242,13 +1242,39 @@ function renderDiagram(){
   }
   // edges — each in its own selectable group (hit area + visible line + midpoint chevron)
   const eLayer=svgNode('g',{id:'edgeLayer'}); root.appendChild(eLayer);
+  // horizontal segments of every edge, for line jumps at unavoidable crossings
+  const hSegs=[];
+  for(const e of [...d.edges,...d.mfEdges]) for(let i=1;i<(e.pts||[]).length;i++){
+    const a=e.pts[i-1], b=e.pts[i];
+    if(Math.abs(a.y-b.y)<0.5 && Math.abs(a.x-b.x)>0.5) hSegs.push({id:e.id,y:a.y,x0:Math.min(a.x,b.x),x1:Math.max(a.x,b.x)});
+  }
+  const HOP=5;
+  const hopPath=(e)=>{
+    const P=e.pts; let dstr=`M${P[0].x},${P[0].y}`;
+    for(let i=1;i<P.length;i++){
+      const a=P[i-1], b=P[i];
+      if(Math.abs(a.x-b.x)<0.5 && Math.abs(a.y-b.y)>2*HOP){
+        const dir=Math.sign(b.y-a.y);
+        const ys=hSegs.filter(h=>h.id!==e.id && h.x0+1<a.x && a.x<h.x1-1 &&
+                  Math.min(a.y,b.y)+HOP<h.y && h.y<Math.max(a.y,b.y)-HOP)
+                .map(h=>h.y).sort((u,v)=>dir*(u-v));
+        let last=null;
+        for(const y of ys){
+          if(last!==null && Math.abs(y-last)<2*HOP+1) continue; last=y;
+          dstr+=` L${a.x},${y-dir*HOP} A${HOP},${HOP} 0 0 ${dir>0?1:0} ${a.x},${y+dir*HOP}`;
+        }
+      }
+      dstr+=` L${b.x},${b.y}`;
+    }
+    return dstr;
+  };
   const buildEdge=(e,isMsg,highlight)=>{
     const sel = highlight || e.id===STATE.selectedEdge;
     const g=svgNode('g',{class:'edge','data-edge':e.id, style:'cursor:pointer'});
     const ptsStr=e.pts.map(p=>`${p.x},${p.y}`).join(' ');
     g.appendChild(svgNode('polyline',{points:ptsStr,fill:'none',stroke:'transparent','stroke-width':14}));
     const stroke = sel?'#FFD36E':(isMsg?'#5A6378':'#3A4456');
-    const vis=svgNode('polyline',{points:ptsStr,fill:'none',stroke,
+    const vis=svgNode('path',{d:hopPath(e),fill:'none',stroke,
       'stroke-width': sel?2.6:(isMsg?1.4:1.6),'stroke-linejoin':'round','stroke-linecap':'round',
       'marker-end': sel?'url(#arrowSel)':(isMsg?'url(#arrowMsg)':'url(#arrow)')});
     if(isMsg) vis.setAttribute('stroke-dasharray','5 4');
@@ -1277,7 +1303,14 @@ function renderDiagram(){
   const labLayer=svgNode('g',{id:'labelLayer'}); root.appendChild(labLayer);
   for(const e of d.edges){
     if(!e.label) continue;
-    const pos=clearLabelPoint(e.pts, d.boxes, e.branch?0.28:0.5);
+    // a branch whose route bends: label its last run, where it is no longer
+    // sharing a trunk with sibling branches
+    let pos=null;
+    if(e.branch && e.pts && e.pts.length>=3){
+      const a=e.pts[e.pts.length-2], b=e.pts[e.pts.length-1];
+      if(Math.hypot(b.x-a.x,b.y-a.y)>60) pos=clearLabelPoint([a,b], d.boxes, 0.4);
+    }
+    if(!pos) pos=clearLabelPoint(e.pts, d.boxes, e.branch?0.28:0.5);
     drawEdgeLabel(labLayer, e.label, pos.x, pos.y, e.branch, e.id===STATE.selectedEdge);
   }
   // token layer on top
@@ -1367,7 +1400,8 @@ function renderNode(n,box){
     };
     if(pol && pol.irreversible.val) badge('#2A2008','#F5A524','⛔',true);
     if(n.enh.escalations && n.enh.escalations.length) badge('#221A33','#B197FC','⤴',false);
-    if(pol && pol.audited.val) g.appendChild(svgNode('circle',{cx:box.x+box.w-3,cy:box.y+box.h-3,r:4,fill:'#5BA8FF',stroke:'#0F1218','stroke-width':1}));
+    // audited sits in the top badge row: boundary events live on the bottom edge and would cover it
+    if(pol && pol.audited.val) badge('#0F1B2C','#5BA8FF','◉',false);
   }
   if(sel){
     g.appendChild(svgNode('rect',{x:box.x-7,y:box.y-7,width:box.w+14,height:box.h+14,rx:13,
@@ -1502,74 +1536,90 @@ function resetSim(silent){
 function nodeById(id){return STATE.model.nodesById.get(id);}
 function outFlows(n){return n.outgoing.map(fid=>STATE.model.flowsById.get(fid)).filter(Boolean);}
 
+/* boundary events attached to a node, in model order */
+function boundariesOf(n){
+  return [...STATE.model.nodesById.values()].filter(b=>b.local==='boundaryEvent'&&b.attachedToRef===n.id);
+}
+function isJoin(n){ return n && n.local==='parallelGateway' && n.incoming.length>1; }
+/* a token arriving at a parallel join waits there until every incoming branch has arrived */
+function placeToken(list,id,targetRef){
+  list.push(isJoin(nodeById(targetRef)) ? {id, at:targetRef, _wait:true} : {id, at:targetRef});
+}
+/* options for a token that needs a human decision before it can move, or null */
+function decisionFor(tok){
+  if(!STATE.manualBranch || tok._wait) return null;
+  const n=nodeById(tok.at); if(!n) return null;
+  const outs=outFlows(n);
+  const opts=[];
+  const isExclusive = n.local==='exclusiveGateway'||n.local==='inclusiveGateway';
+  if(isExclusive && outs.length>1){
+    outs.forEach(f=>opts.push({kind:'flow', label:f.name||'', target:f.targetRef, flow:f}));
+  } else {
+    const bnds=boundariesOf(n);
+    if(!bnds.length) return null;
+    // normal completion first, then each attached boundary event
+    if(n.local==='parallelGateway' && outs.length>1) opts.push({kind:'normal', label:'complete normally', target:null, outs});
+    else outs.forEach(f=>opts.push({kind:'normal', label:f.name||'complete normally', target:f.targetRef, flow:f}));
+    bnds.forEach(b=>opts.push({kind:'boundary', label:'⚡ '+(b.name||b.id), target:b.id, node:b}));
+  }
+  return opts.length>1 ? {tok, node:n, opts} : null;
+}
+
 function step(){
   const m=STATE.model; if(!m) return;
-  if(STATE.pending){ return; }            // waiting on a manual branch
+  if(STATE.pending){ return; }            // waiting on a manual decision
   if(!STATE.tokens.length){ logMsg('done','✓','no live tokens — process complete'); pauseRun(); return; }
 
-  const next=[]; let movedEnhanced=null;
-  // parallel-join bookkeeping
-  const arriving=new Map();
-
+  // decisions first: nothing moves this step until the human picks a path, so
+  // tokens are never duplicated by a half-applied step
   for(const tok of STATE.tokens){
-    const n=nodeById(tok.at); if(!n){ continue; }
-    const outs=outFlows(n);
-
-    // terminal
-    if(outs.length===0){ logMsg('done','✓',`token ${tok.id} completed at ${label(n)}`); continue; }
-
-    // gateway branching
-    const isExclusive = n.local==='exclusiveGateway'||n.local==='inclusiveGateway';
-    const isParallel  = n.local==='parallelGateway';
-
-    if(isExclusive && outs.length>1){
-      if(STATE.manualBranch){
-        STATE.pending={tok, node:n, outs};
-        next.push(tok);                    // hold the token here
-        showBranchPicker(n,outs);
-        // keep remaining tokens in place this step
-        for(const other of STATE.tokens){ if(other!==tok && !next.includes(other)) next.push(other); }
-        STATE.tokens=next; renderTokens();
-        logMsg('sys','⑂',`branch decision required at ${label(n)}`);
-        return;
-      } else {
-        moveAlong(next,tok,outs[0],m); 
-        movedEnhanced = enhEnter(outs[0].targetRef)||movedEnhanced;
-      }
-    } else if(isParallel && outs.length>1){
-      for(const f of outs){ next.push({id:++STATE.tokenSeq, at:f.targetRef}); movedEnhanced=enhEnter(f.targetRef)||movedEnhanced; }
-      logMsg('enter','⑂',`parallel fork at ${label(n)} → ${outs.length} tokens`);
-    } else {
-      const f=outs[0];
-      // simple parallel join: collect, emit once below
-      const tgt=nodeById(f.targetRef);
-      if(tgt && tgt.local==='parallelGateway' && tgt.incoming.length>1){
-        arriving.set(tgt.id,(arriving.get(tgt.id)||0)+1);
-        next.push({id:tok.id, at:tgt.id, _join:true});
-      } else {
-        moveAlong(next,tok,f,m);
-        movedEnhanced = enhEnter(f.targetRef)||movedEnhanced;
-      }
+    const d=decisionFor(tok);
+    if(d){
+      STATE.pending=d; showBranchPicker(d.node,d.opts); renderTokens();
+      const what=d.opts.some(o=>o.kind==='boundary')?'path decision (normal or boundary event)':'branch decision';
+      logMsg('sys','⑂',`${what} required at ${label(d.node)}`);
+      return;
     }
   }
 
-  // collapse parallel joins that are satisfied
-  const collapsed=[]; const seenJoin=new Set();
-  for(const t of next){
-    if(t._join){
-      const jn=nodeById(t.at);
-      if(seenJoin.has(t.at)) continue;
-      const need=jn.incoming.length, have=arriving.get(t.at)||0;
-      if(have>=need){ seenJoin.add(t.at);
-        const o=outFlows(jn);
-        if(o.length){ collapsed.push({id:++STATE.tokenSeq,at:o[0].targetRef}); logMsg('enter','⑃',`parallel join at ${label(jn)}`); movedEnhanced=enhEnter(o[0].targetRef)||movedEnhanced; }
-      } else { seenJoin.add(t.at); collapsed.push({id:t.id,at:t.at}); }
-    } else collapsed.push(t);
+  const next=[]; let movedEnhanced=null;
+  for(const tok of STATE.tokens){
+    if(tok._wait){ next.push(tok); continue; }          // parked at a join
+    const n=nodeById(tok.at); if(!n){ continue; }
+    const outs=outFlows(n);
+    if(outs.length===0){ logMsg('done','✓',`token ${tok.id} completed at ${label(n)}`); continue; }
+    const isExclusive = n.local==='exclusiveGateway'||n.local==='inclusiveGateway';
+    if(n.local==='parallelGateway' && outs.length>1){
+      for(const f of outs){ placeToken(next,++STATE.tokenSeq,f.targetRef); movedEnhanced=enhEnter(f.targetRef)||movedEnhanced; }
+      logMsg('enter','⑂',`parallel fork at ${label(n)} → ${outs.length} tokens`);
+    } else {
+      const f=outs[0];                                    // auto mode: default / first path
+      if(isExclusive && outs.length>1) logMsg('sys','⑂',`auto branch at ${label(n)} → ${trim(name(f.targetRef),22)}`);
+      placeToken(next,tok.id,f.targetRef);
+      movedEnhanced = enhEnter(f.targetRef)||movedEnhanced;
+    }
   }
-  STATE.tokens=collapsed;
+  STATE.tokens=fireJoins(next, id=>{ movedEnhanced=enhEnter(id)||movedEnhanced; });
   renderTokens(); renderLog();
   if(movedEnhanced) select(movedEnhanced, true);
   if(!STATE.tokens.length){ logMsg('done','✓','process complete'); pauseRun(); }
+}
+
+/* a join fires once tokens have arrived on all of its incoming flows: the
+   waiting tokens are consumed and one token leaves on each outgoing flow */
+function fireJoins(tokens,onEnter){
+  const waiting=new Map();
+  for(const t of tokens) if(t._wait) waiting.set(t.at,(waiting.get(t.at)||0)+1);
+  let out=tokens;
+  for(const [jid,have] of waiting){
+    const jn=nodeById(jid);
+    if(have<jn.incoming.length) continue;
+    let drop=jn.incoming.length;
+    out=out.filter(t=>!(t._wait&&t.at===jid&&drop-->0));
+    logMsg('enter','⑃',`parallel join at ${label(jn)} — all ${jn.incoming.length} branches arrived`);
+    for(const f of outFlows(jn)){ placeToken(out,++STATE.tokenSeq,f.targetRef); onEnter(f.targetRef); }
+  }
+  return out;
 }
 
 function moveAlong(next,tok,flow,m){ next.push({id:tok.id, at:flow.targetRef}); }
@@ -1618,39 +1668,56 @@ function renderTokens(){
 }
 
 /* ---- manual branch picker (HTML overlay) ---- */
-function showBranchPicker(node,outs){
+function showBranchPicker(node,opts){
   clearBranchPicker();
   const wrap=$('#canvasWrap');
   const div=el('div'); div.id='branchPicker';
   div.style.cssText='position:absolute;left:50%;top:16px;transform:translateX(-50%);z-index:25;'+
     'background:rgba(22,26,34,.96);border:1px solid var(--escal);border-radius:12px;padding:11px 13px;'+
-    'box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:520px';
+    'box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:560px';
   const h=el('div'); h.style.cssText='font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--escal);margin-bottom:8px';
-  h.textContent=`branch · ${node.enh?(node.enh.determinism==='nondeterministic'?'AI gateway · ':'Program gateway · '):''}${label(node)}`;
+  const hasB=opts.some(o=>o.kind==='boundary');
+  h.textContent=`${hasB?'path':'branch'} · ${node.enh?(node.enh.determinism==='nondeterministic'?'AI ':'Program '):''}${hasB?'':'gateway · '}${label(node)}`;
   div.appendChild(h);
   const row=el('div'); row.style.cssText='display:flex;gap:7px;flex-wrap:wrap';
-  outs.forEach(f=>{
-    const tgt=STATE.model.nodesById.get(f.targetRef);
+  opts.forEach(o=>{
     const btn=el('button');
+    const accent=o.kind==='boundary'?'var(--warn)':'var(--escal)';
     btn.style.cssText='background:var(--raised2);border:1px solid var(--line2);color:var(--ink);'+
-      'padding:7px 11px;border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font-ui)';
-    btn.textContent=(f.name?`${f.name} → `:'→ ')+ (tgt?label(tgt):f.targetRef);
-    btn.onmouseenter=()=>btn.style.borderColor='var(--escal)';
+      'padding:7px 11px;border-radius:8px;font-size:12px;cursor:pointer;font-family:var(--font-ui)'+
+      (o.kind==='boundary'?';border-style:dashed':'');
+    let dest='';
+    if(o.kind==='boundary'){ const bo=outFlows(o.node)[0]; dest=bo?' → '+name(bo.targetRef):''; }
+    else if(o.target) dest=(o.label?' → ':'→ ')+name(o.target);
+    btn.textContent=(o.label||'')+dest;
+    btn.onmouseenter=()=>btn.style.borderColor=accent;
     btn.onmouseleave=()=>btn.style.borderColor='var(--line2)';
-    btn.onclick=()=>chooseBranch(f);
+    btn.onclick=()=>chooseBranch(o);
     row.appendChild(btn);
   });
   div.appendChild(row);
   wrap.appendChild(div);
 }
 function clearBranchPicker(){const p=$('#branchPicker'); if(p)p.remove();}
-function chooseBranch(flow){
+function chooseBranch(o){
   const p=STATE.pending; if(!p) return;
   STATE.pending=null; clearBranchPicker();
-  STATE.tokens=STATE.tokens.filter(t=>t!==p.tok);
-  STATE.tokens.push({id:p.tok.id, at:flow.targetRef});
-  logMsg('enter','✓',`branch chosen at ${label(p.node)} → ${trim(name(flow.targetRef),22)}`);
-  const en=enhEnter(flow.targetRef);
+  if(o && o.targetRef && !o.kind) o={kind:'flow', target:o.targetRef};   // legacy callers pass a flow
+  const rest=STATE.tokens.filter(t=>t!==p.tok);
+  let en=null;
+  if(o.kind==='boundary'){
+    rest.push({id:p.tok.id, at:o.target});               // token jumps to the boundary event
+    logMsg('escal','⚡',`boundary event "${label(o.node)}" fired on ${label(p.node)} — normal completion skipped`);
+    en=enhEnter(o.target);
+  } else if(o.outs){                                     // normal completion of a forking host
+    for(const f of o.outs){ placeToken(rest,++STATE.tokenSeq,f.targetRef); en=enhEnter(f.targetRef)||en; }
+    logMsg('enter','✓',`${label(p.node)} completed normally`);
+  } else {
+    placeToken(rest,p.tok.id,o.target);
+    logMsg('enter','✓',`${o.kind==='normal'?'completed normally':'branch chosen'} at ${label(p.node)} → ${trim(name(o.target),22)}`);
+    en=enhEnter(o.target);
+  }
+  STATE.tokens=fireJoins(rest, id=>{ en=enhEnter(id)||en; });
   renderTokens(); renderLog();
   if(en) select(en,true);
   if(STATE.running) resumeRun();
